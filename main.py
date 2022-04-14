@@ -1,0 +1,379 @@
+import logging
+import time
+import pandas as pd
+import os, sys
+import csv
+import tensorflow as tf
+from tensorflow.keras.optimizers import schedules
+import tensorflow_addons as tfa
+from tensorflow.keras.utils import Progbar
+import numpy as np
+from Model import lc_NIC
+from DataLoaders import load_avg_betas2 as loader
+from DataLoaders import data_generator as generator
+from Callbacks import BatchLoss, EpochLoss, WarmupScheduler, Predict
+from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
+from collections import defaultdict
+from datetime import datetime
+import subprocess
+import yaml
+
+gpu_to_use = 0
+print(f"Running on GPU: {gpu_to_use}", flush=True)
+
+# Allow memory growth on GPU devices
+#physical_devices = tf.config.experimental.list_physical_devices('GPU')
+#print(physical_devices, flush=True)
+#for i in range(0, len(physical_devices)):
+#    tf.config.experimental.set_memory_growth(physical_devices[i], True)
+#tf.config.set_visible_devices(physical_devices[gpu_to_use], 'GPU')
+
+#thesis_dir = "/home/hpcgies1/rds/hpc-work/NIC/Masters-Thesis/AttemptFour/"
+thesis_dir = "/home/hpcgies1/Masters-Thesis/AttemptFour/"
+
+## Load the configuration file
+with open(f"{thesis_dir}/config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+    print(f"Config file loaded.", flush=True)
+
+run_name = config['run']
+run_path = os.path.join(config['log'], run_name)
+
+if not os.path.exists(run_path):
+    os.makedirs(run_path)
+    print(f"Creating training Log folder: {run_path}", flush=True)
+else:
+    print(f"Training Log will be saved to: {run_path}", flush=True)
+
+with open(f"{run_path}/config.yaml", "w+") as f:
+    yaml.dump(config, f)
+
+logging.basicConfig(filename=f'{run_path}/log.log', filemode='w', level=logging.DEBUG)
+logging.info(f"training starts at:   {datetime.now()}")
+
+np.random.seed(config['seed'])
+tf.random.set_seed(config['seed'])
+
+# Copy Model file to run_path folder for record
+subprocess.run(["cp", "/home/hpcgies1/Masters-Thesis/AttemptFour/Model/lc_NIC.py", f"{run_path}/lc_NIC.py"], shell=False, check=True)
+print(f"Model file copied to {run_path} for record", flush=True)
+
+## Parameters
+vocab_size = config['top_k'] + 1
+
+#
+## Load data
+#
+train_keys, val_keys, test_keys = loader.get_nsd_keys('1')
+print("train_keys:", train_keys.shape)
+print("val_keys:", val_keys.shape)
+print("test_keys:", test_keys.shape)
+
+# Create pairs
+train_pairs = np.array(loader.create_pairs(train_keys, subj='1'))
+val_pairs = np.array(loader.create_pairs(val_keys, subj='1'))
+print("train_pairs:", train_pairs.shape)
+print("val_pairs:  ", val_pairs.shape)
+
+# Load Betas
+train_betas, val_betas, _ = loader.load_split_betas('1')
+print("train_betas:", train_betas.shape)
+print("val_betas:", val_betas.shape)
+
+#tokenizer = loader.load_tokenizer()
+tokenizer, _ = loader.build_tokenizer(np.arange(1, 73001), config['top_k'])
+
+#cos_decay = schedules.CosineDecay(initial_learning_rate=0.001, decay_steps=1000, alpha=0.01, name=None )
+initial_lr = 0.1 * (config['batch_size'] / 256)
+lr_decay = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=0.1, decay_steps=1000, decay_rate=0.009, staircase=False, name=None)
+#lr_decay = tf.keras.experimental.LinearCosineDecay(initial_learning_rate=0.001, decay_steps=1000, num_periods=0.5, alpha=0.0, beta = 1e-3, name=None)
+
+def lr_schedule(step):
+    # final lr = initial_lr * decay_rate
+    decay_steps = 10
+    decay_rate = 0.01
+    inital_lr = 0.01
+    final_lr = 0.0001
+    return 0.0001
+    #return max(inital_lr * decay_rate ** (step / decay_steps), final_lr)
+
+# Setup optimizer
+if config['optimizer'] == 'Adam':
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1 = 0.9, beta_2=0.98, epsilon=10.0e-9, clipnorm=config['clipnorm'])
+    #optimizer = tfa.optimizers.AdamW(0.001, config['alpha'], beta_1 = 0.9, beta_2 = 0.98, epsilon = 10.0e-09)
+    print(f"Using optimizer: Adam", flush=True)
+elif config['optimizer'] == 'SGD':
+    optimizer = tf.keras.optimizers.SGD(learning_rate=config['alpha'], momentum=0.9, nesterov=False)
+    print(f"Using optimizer: SGD", flush=True)
+else:
+    print("No optimizer specified", flush=True)
+
+# Loss function
+loss_object = tf.keras.losses.CategoricalCrossentropy(
+        from_logits=False,
+        reduction='none'
+)
+
+# Setup Model
+model = lc_NIC.NIC(
+        loader.get_groups(config['group_size'], separate_hemi=True),
+        #loader.select_groups(config['group_size'], remove=[142,17,133,315,1, 197,158,192,135,153,137,140,92,183,125]),
+        config['units'],
+        config['embedding_features'],
+        config['embedding_text'],
+        config['attn_units'],
+        vocab_size,
+        config['max_length'],
+        config['dropout_input'],
+        config['dropout_features'],
+        config['dropout_text'],
+        config['dropout_attn'],
+        config['dropout_lstm'],
+        config['dropout_out'],
+        config['input_reg'],
+        config['attn_reg'],
+        config['lstm_reg'],
+        config['output_reg']
+        )
+#Compile
+model.compile(optimizer, loss_object, run_eagerly=True)
+
+## The following relates to pre-loading LSTM weights
+init_generator = generator.DataGenerator(
+        train_pairs,
+        train_betas,
+        config['batch_size'],
+        tokenizer,
+        config['units'],
+        config['max_length'],
+        vocab_size,
+        pre_load_betas=False,
+        shuffle=False, training=True)
+build_time = time.perf_counter()
+temp = init_generator.__getitem__(0)[0]
+print(len(temp))
+print(temp[0].shape)
+model(temp, training=False)
+print(f"Model build time: {(time.perf_counter() - build_time):.3f}", flush=True)
+print(model.summary(), flush=True)
+if False:
+    # 1. Make one pass through the model
+    model(init_generator.__getitem__(0)[0])
+    print(model.summary(), flush=True)
+    # 2. Load weights
+    pre_trained_weights = np.load('./Log/vgg16_all_samples/pre_train_weights.npy', allow_pickle=True)
+    for i in pre_trained_weights:
+        print(i.shape)
+    lstm_weights = pre_trained_weights[-5:-2]
+    time_dist_weights = pre_trained_weights[-2:]
+    # 3. Set LSTM layer weights
+    model.get_layer('lstm').set_weights(lstm_weights)
+    model.get_layer('time_distributed_softmax').set_weights(time_dist_weights)
+    print("Weights loaded for: LSTM & Time-distributed-softmax")
+
+
+
+# Setup Checkpoint handler
+checkpoint_path = f"{run_path}/model/"
+if not os.path.exists(checkpoint_path):
+    os.makedirs(checkpoint_path)
+checkpoint_path_best = f"{checkpoint_path}" + "model-ep{epoch:03d}.h5"
+checkpoint_best = ModelCheckpoint(
+        checkpoint_path_best,
+        monitor='val_loss',
+        verbose=1,
+        save_weights_only=True,
+        save_best_only=True,
+        mode='min',
+        period=1
+)
+checkpoint_path_latest = f"{checkpoint_path}model-latest.h5"
+checkpoint_latest = ModelCheckpoint(
+        checkpoint_path_latest,
+        monitor='val_loss',
+        verbose=0,
+        save_weights_only = True,
+        save_best_only = False,
+        mode = 'min',
+        period=1
+)
+
+#
+## Callbacks
+#
+#batch_loss_writer = BatchLoss.BatchLoss(f"{run_path}/batch_training_log.csv", f"{run_path}")
+#epoch_loss_writer = EpochLoss.EpochLoss(f"{run_path}/training_log.csv")
+loss_history = EpochLoss.LossHistory(f"{run_path}/loss_history.csv", f"{run_path}")
+
+#early_stop = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=5)
+#reduce_lr = ReduceLROnPlateau(monitor='val_loss', verbose=1, factor=0.1, patience=10, min_delta=0.005, min_lr=0.0001)
+
+logdir = f"./tb_logs/scalars/{config['run']}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+tensorboard_callback = TensorBoard(
+        log_dir=logdir,
+        update_freq='batch',
+        #histogram_freq=1,
+        #write_graph=True,
+        #write_images=True,
+        #embeddings_freq=1,
+        #profile_batch='200,220',
+        )
+#file_writer = tf.summary.create_file_writer(logdir)
+
+# Init a generator used during the predict callback
+#val_generator_pred = create_generator(val_pairs, False)
+#predict_callback = Predict.Predict(val_generator_pred, tokenizer, file_writer, config['max_length'], config['units'])
+
+lr_scheduler = tf.keras.callbacks.LearningRateScheduler(
+        lr_schedule, verbose = 0)
+
+_callbacks = [
+        lr_scheduler,
+        loss_history,
+        #tensorboard_callback,
+        #checkpoint_latest,
+        checkpoint_best,
+]
+callbacks = tf.keras.callbacks.CallbackList(
+            _callbacks, add_history=True, model=model)
+
+logs = {}
+start_epoch = 0
+
+def dotfit():
+    logging.info("training with .fit()")
+
+    train_generator = generator.DataGenerator(
+            train_pairs,
+            train_betas,
+            config['batch_size'],
+            tokenizer,
+            config['units'],
+            config['max_length'],
+            vocab_size,
+            pre_load_betas=False,
+            shuffle=True, training=True)
+    val_generator = generator.DataGenerator(
+            val_pairs,
+            val_betas,
+            config['batch_size'],
+            tokenizer,
+            config['units'],
+            config['max_length'],
+            vocab_size,
+            pre_load_betas=False,
+            shuffle=False, training=True)
+
+    """
+    model_name = './Log/no_attn_loss_const_lr2/model/model-ep114.h5'
+    start_epoch = 20
+    print(f"loading weights from:\n\t {model_name}")
+    print(f"starting training from epoch: {start_epoch}")
+    model.load_weights(model_name,by_name=True,skip_mismatch=True)
+    """
+
+    model.fit(
+            train_generator,
+            epochs = config['epochs'],
+            steps_per_epoch = len(train_pairs)//config['batch_size'],
+            batch_size = config['batch_size'],
+            callbacks = _callbacks,
+            validation_data = val_generator,
+            validation_steps = len(val_pairs)//config['batch_size'],
+            initial_epoch = start_epoch,
+            #max_queue_size= 20,
+            #workers= 10,
+            #use_multiprocessing=True,
+    )
+    return
+
+
+
+
+def custom_train_loop():
+    print(f"------\nRunning custom training loop")
+    print(f"for {config['epochs'] - start_epoch} epochs\n------")
+    logging.info("training with custom training loop")
+
+    train_generator = generator.DataGenerator(train_pairs, config['batch_size'], tokenizer, config['units'], config['max_length'], vocab_size, shuffle=True, training=True)
+    val_generator = generator.DataGenerator(val_pairs, config['batch_size'], tokenizer, config['units'], config['max_length'], vocab_size, shuffle=True, training=True)
+
+    grads = []
+
+    # Train for N epochs
+    callbacks.on_train_begin(logs=logs)
+    for epoch in range(start_epoch, config['epochs']):
+        print(f"\nepoch {epoch+1}/{config['epochs']}")
+        epoch_start_time = time.time()
+        callbacks.on_epoch_begin(epoch, logs=logs)
+
+        # Reshuffle train/val pairs
+        #train_pairs = loader.create_pairs(train_keys, config['dataset']['captions_path'], seed = shuffle_seed)
+        #val_pairs   = loader.create_pairs(val_keys,   config['dataset']['captions_path'], seed = shuffle_seed)
+        # Instantiate new generator
+        #train_generator = create_generator(train_pairs, True)
+        #val_generator = create_generator(val_pairs, False)
+
+        #batch_train_loss = defaultdict(list)
+        #batch_val_loss = defaultdict(list)
+
+        # Progress bar
+        pb = Progbar(len(train_pairs)/config['batch_size'])#, stateful_metrics=['loss', 'l2', 'accuracy'])
+        pb2 = Progbar(len(val_pairs)/config['batch_size'])#, stateful_metrics=['val-loss', 'val-l2', 'val-accuracy'])
+
+        # Training
+        for (batch_nr, data) in enumerate(train_generator):
+            callbacks.on_batch_begin(epoch, logs=logs)
+            #target = data[1]
+            #target = tokenizer.sequences_to_texts(np.argmax(target, axis=2))
+
+            # data -> ([betas, cap_vector, a0, c0], target)
+            #print( "tf.executing_eagerly()", tf.executing_eagerly() )
+            losses, grad = model.train_step(data)
+
+            grads.append(grad)
+
+            #for key, v in losses.items():
+            #    batch_train_loss[key].append(v)
+
+            values = list(losses.items())
+            pb.add(1, values=values)
+
+            callbacks.on_train_batch_end(batch_nr, logs=losses)
+
+
+        # Validation
+        for (batch_nr, data) in enumerate(val_generator):
+
+            losses_val = model.test_step(data)
+
+            #for key, v in losses.items():
+            #    batch_val_loss[key].append(v)
+
+            values = list(losses_val.items())
+            pb2.add(1, values=values)
+
+            callbacks.on_test_batch_end(batch_nr, logs=losses_val)
+
+        # On-Epoch-End
+        callbacks.on_epoch_end(epoch, logs=logs)
+        #model.save_weights(f"{config['log']}/{config['run']}/model/checkpoints/checkpoint_latest")
+
+    # On-Train-End
+    callbacks.on_train_end(logs=logs)
+
+    df = pd.DataFrame(grads)
+    df.to_csv(f'{run_path}/df_grads.csv')
+    df.to_pickle(f'{run_path}/df_grads.csv')
+
+    return
+
+if __name__ == '__main__':
+    try:
+        #custom_train_loop()
+        dotfit()
+    except KeyboardInterrupt as e:
+        print("--Keyboard Interrupt--", flush=True)
+    finally:
+        print(f"Done.", flush=True)
+

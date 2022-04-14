@@ -1,0 +1,66 @@
+---
+ # Name the current run
+ run: image_attention_model_single_enc_bn
+
+ info: | 
+     single encoder layer + bn
+     using 196 * 512 input
+     smaller input L2 by 100x 
+     Show attend and tell model
+     using only 485 validation samples, rest is test set
+     dropout
+     no attention loss
+     constant learning rate of 0.0001
+     trained on subj 2 samples
+     no adap grad clip
+
+ # Data stores
+ dataset:
+     betas_path: "/fast/seagie/data/subj_2/betas_averaged/"
+     captions_path: "/fast/seagie/data/subj_2/captions/"
+     vgg16_path: "/fast/seagie/data/subj_2/vgg16/"
+     nsd_dir: "/home/seagie/NSD2"
+ log: "./Log/"
+
+ seed: 42
+
+ # Training
+ epochs: 100
+ batch_size: 64
+ max_length: 15
+ top_k: 5000 # vocab size
+ optimizer: Adam
+ alpha: 0.0001 # 0.0001
+ clipnorm: 0.1
+ decay: 0 #1.0e-4
+
+ dropout_input: 0 # 0.1 
+ dropout_features: 0.2
+ dropout_text: 0.2
+ dropout_lstm: 0.2 
+ dropout_attn: 0.2 
+ dropout_out: 0.2
+
+ input_reg: 0.01         # scientific notation requires decimal notation - x.0e
+ attn_reg: 0.001
+ lstm_reg: 0.00003
+ output_reg: 0.00001 
+
+ # Input size
+ input: 
+     full: 327684
+     vc: 62756
+     pca: 5000
+     mscoco: 4096
+
+ # Model size 
+ units: 512 # 2048 # lstm
+ attn_units: 32
+ group_size: 32 # acts as embedding dim for attention model
+ embedding_features: 512
+ embedding_text: 512
+
+
+
+
+

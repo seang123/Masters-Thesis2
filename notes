@@ -1,0 +1,15 @@
+## Download data from aws with this command
+
+aws s3 sync s3://natural-scenes-dataset/nsddata ./nsddata_s1 --exclude "*subj0*" --include "*subj01*" --exclude "*func1mm*" --exclude "*func1pt8mm*" --exclude "*MNI*" --exclude "*nativesurface*" --exclude "*betas_assumehrf*" --exclude "*betas_fithrf/*" --exclude "*restingbetas_fithrf*"
+
+using --no-sign-request doesn't download the last 2 trials for some reason
+
+aws configure -- to set access and secret key (see ru mail)
+
+# search aws
+aws s3 ls s3://natural-scenes-dataset --recursive | grep lh.HCP_MMP1.mgz | cut -c 32-
+
+## Saving the pairs created at the start of training and those created at the start of evaluation and comparing them through 'diff train_pairs.txt eval_train_pairs.txt' shows no differences.
+
+- Running tensorboard
+tensorboard --logdir=/home/seagie/NSD/Code/Masters-Thesis/AttemptFour/tb_logs --port=6007
