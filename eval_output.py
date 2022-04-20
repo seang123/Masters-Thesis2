@@ -17,7 +17,7 @@ from nltk import pos_tag, pos_tag_sents, word_tokenize
 #nltk.download('averaged_perceptron_tagger')
 #nltk.download('universal_tagset')
 import argparse
-import scipy.stats as scipy_stats 
+import scipy.stats as scipy_stats
 import guse_comparison as guse_comp
 
 parser = argparse.ArgumentParser(description='Evaluate NIC model')
@@ -117,7 +117,7 @@ def visualise_attention(idx: int, attention_scores, outputs):
         idx
             trial idx [0, 1000)
     """
-    
+
     attn = attention_scores[idx]
 
     caption, caption_split = get_caption(idx, outputs)
@@ -157,7 +157,7 @@ def visualise_attention(idx: int, attention_scores, outputs):
         axes[r,c].axis('off')
         r += 1
         x += 1
-    
+
 
     axes[r,c].axis('off')
     #fig.colorbar(images[-1], ax=axes, orientation='horizontal', fraction=.1)
@@ -195,10 +195,10 @@ def print_examples(samples: int, output: np.array):
         print(f"\n--- idx: {i} - NSD: {val_keys['nsd_key'].iloc[i]} --- ")
         print("\tCandidate:", cand)
         print("\tTarget:   ", targ)
- 
+
 
 def plot_image_caption(idx: int, output: np.array):
-    """ Plot the image caption pair 
+    """ Plot the image caption pair
     Returns:
     --------
         caption : str
@@ -259,7 +259,7 @@ def avg_attention_across_trials(attention_scores):
         title_str = ""
         for i, region_idx in enumerate(attn_w):
             if region_idx >= 180:
-                region_idx -= 180 
+                region_idx -= 180
             title_str += f"\n{df['Area Description'].iloc[region_idx]}"
             break
 
@@ -330,14 +330,14 @@ def regions_count(attention_scores):
     print("regions:", len(regions))
 
     d = np.zeros((15, 360), dtype=np.int32)
-    
+
     for l in range(length):
         x = np.argsort(attn[l, :])
         d[l, :] = x
 
     df = pd.DataFrame(d, index=range(15), columns=range(1, 361))
     print(df.describe())
-    
+
 
 def top_regions_over_time_trial(attention_scores):
     """ Average across trials and across timesteps - then print the top 10 regions """
@@ -442,7 +442,7 @@ def remove_pad(caption: str, end='remove', replace_unk=True):
     elif end == 'leave':
         pass
     if replace_unk:
-        x = ['unk' if i == '<unk>' else i for i in x] 
+        x = ['unk' if i == '<unk>' else i for i in x]
     return " ".join(x)
 
 def ner(outputs):
@@ -466,7 +466,7 @@ def ner(outputs):
         for entity in doc.ents:
                 print(entity.text, entity.label_)
         break
-    
+
 
 def tagging(outputs, tagset = 'universal'):
     """ Tag captions using the NLTK part-of-speech tagger
@@ -478,7 +478,7 @@ def tagging(outputs, tagset = 'universal'):
         tagset : str
             Tag set to use, 'universal', 'wsj', or 'brown'
     """
-    
+
     print(pos_tag(['end']))
     print(pos_tag(['pad']))
 
@@ -504,7 +504,7 @@ def attention_by_tag(outputs, attention_scores):
     for t in tags:
         for i, j in tags_dict[t]:
             attention_tag[t].append(attention_scores[i, j, :])
-    
+
         print(f"{t} - {len(tags_dict[t])}")
 
     overall_mean = np.mean(np.mean(attention_scores, axis=0), axis=0)
@@ -524,7 +524,7 @@ def attention_by_tag(outputs, attention_scores):
     r = 0
     for tag in tags:
         attention_tag_i = np.array(attention_tag[tag])
-        attention_tag_i = np.mean(attention_tag_i, axis=0) 
+        attention_tag_i = np.mean(attention_tag_i, axis=0)
         print(f"{tag} - {np.std(attention_tag_i, axis=0):.5f}")
         attention_tag_i -= overall_mean
 
@@ -642,11 +642,11 @@ if __name__ == '__main__':
     #guse_comparison(idx, outputs)
 
     #attention_against_word(idx, outputs, attention_scores)
-    
+
     #top_regions_over_time_trial(attention_scores)
     #temp(attention_scores)
     #correlation(attention_scores)
-    
+
     #top_region_over_time(idx, attention_scores)
     #visualise_attention(idx, attention_scores, outputs)
     avg_attention_across_trials(attention_scores)

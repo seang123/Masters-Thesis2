@@ -12,7 +12,7 @@ from Model import lc_NIC
 #from Model import ms2_NIC as lc_NIC
 #from Model import tmp_lc_NIC as lc_NIC
 from DataLoaders import load_avg_betas2 as loader
-from DataLoaders import data_generator_many_subs as generator
+from DataLoaders import data_generator_ms_sing_enc as generator
 #from DataLoaders import data_generator_multisub as generator
 from Callbacks import BatchLoss, EpochLoss, WarmupScheduler, Predict
 from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, TensorBoard, EarlyStopping, ReduceLROnPlateau
@@ -65,70 +65,23 @@ vocab_size = config['top_k'] + 1
 #
 ## Load data
 #
-train_keys_one, val_keys_one, _ = loader.get_nsd_keys('1')
-print("subject 1")
-print("train_keys:", train_keys_one.shape)
-print("val_keys:", val_keys_one.shape)
-train_keys, val_keys, _ = loader.get_nsd_keys('2')
-print("subject 2")
-print("train_keys:", train_keys.shape)
-print("val_keys:", val_keys.shape)
-train_keys_five, val_keys_five, _ = loader.get_nsd_keys('5')
-print("subject 5")
-print("train_keys:", train_keys_five.shape)
-print("val_keys:", val_keys_five.shape)
-train_keys_seven, val_keys_seven, _ = loader.get_nsd_keys('7')
-print("subject 7")
-print("train_keys:", train_keys_seven.shape)
-print("val_keys:", val_keys_seven.shape)
+train_pairs, val_pairs, test_pairs, train_betas, val_betas, _ = loader.load_subs([1,2,3,4,5,6,7,8]) # (subs 4 and 8 val set is == test set)
+train_pairs = np.concatenate(train_pairs, axis=0)
+#val pairs 1 3 5 7
+val_pairs = np.concatenate((val_pairs[0], val_pairs[2], val_pairs[4], val_pairs[6]), axis=0)
+print("------ Data ------")
+print("train pairs:", train_pairs.shape)
+print("val pairs:", val_pairs.shape)
 
-# Keep only validation split  (rest is test data)
-#val_split = np.loadtxt("./TrainData/val_split.txt", dtype=np.int32)
-#val_keys = val_keys[val_split]
+for i in range(val_pairs.shape[0]):
+    assert val_pairs[i][-1] != '2', 'subject 2 in val pairs'
+    assert val_pairs[i][-1] != '4', 'subject 4 in val pairs'
+    assert val_pairs[i][-1] != '6', 'subject 6 in val pairs'
+    assert val_pairs[i][-1] != '8', 'subject 8 in val pairs'
 
-train_pairs_one= np.array(loader.create_pairs(train_keys_one, '1'))
-val_pairs_one = np.array(loader.create_pairs(val_keys_one, '1'))
-print("subject 1")
-print("train_pairs:", train_pairs_one.shape)
-print("val_pairs:  ", val_pairs_one.shape)
-
-train_pairs_two = np.array(loader.create_pairs(train_keys, '2'))
-val_pairs_two = np.array(loader.create_pairs(val_keys, '2'))
-print("subject 2")
-print("train_pairs:", train_pairs_two.shape)
-print("val_pairs:  ", val_pairs_two.shape)
-
-train_pairs_five = np.array(loader.create_pairs(train_keys_five, '5'))
-val_pairs_five = np.array(loader.create_pairs(val_keys_five, '5'))
-print("subject 5")
-print("train_pairs:", train_pairs_five.shape)
-print("val_pairs:  ", val_pairs_five.shape)
-
-train_pairs_seven = np.array(loader.create_pairs(train_keys_seven, '7'))
-val_pairs_seven = np.array(loader.create_pairs(val_keys_seven, '7'))
-print("subject 7")
-print("train_pairs:", train_pairs_seven.shape)
-print("val_pairs:  ", val_pairs_seven.shape)
-
-train_pairs = np.array([train_pairs_one, train_pairs_two, train_pairs_five, train_pairs_seven])
-val_pairs = np.array([val_pairs_one, val_pairs_two])
-print("combined train_pairs:", train_pairs.shape)
-print("combined val_pairs:  ", val_pairs.shape)
-
-# Load betas
-train_betas_one, val_betas_one, _ = loader.load_split_betas('1')
-train_betas_two, val_betas_two, _ = loader.load_split_betas('2')
-train_betas_five, val_betas_five, _ = loader.load_split_betas('5')
-train_betas_seven, val_betas_seven, _ = loader.load_split_betas('7')
-print("train_betas_one:", train_betas_one.shape)
-print("val_betas_one:", val_betas_one.shape)
-print("train_betas_two:", train_betas_two.shape)
-print("val_betas_two:", val_betas_two.shape)
-print("train_betas_five:", train_betas_five.shape)
-print("train_betas_seven:", train_betas_seven.shape)
 # Stack betas
-train_betas = np.stack((train_betas_one, train_betas_two, train_betas_five, train_betas_seven), axis=0)
-val_betas = np.stack((val_betas_one, val_betas_two), axis=0)
+#train_betas = np.stack((train_betas_one, train_betas_two, train_betas_five, train_betas_seven), axis=0)
+#val_betas = np.stack((val_betas_one, val_betas_two), axis=0)
 
 tokenizer, _ = loader.build_tokenizer(np.arange(1, 73001), config['top_k'])
 #tokenizer = loader.load_tokenizer()
@@ -278,7 +231,7 @@ _callbacks = [
         loss_history,
         tensorboard_callback,
         #reduce_lr,
-        checkpoint_latest,
+        #checkpoint_latest,
         checkpoint_best,
         #predict_callback,
 #        early_stop

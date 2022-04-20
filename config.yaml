@@ -1,8 +1,11 @@
 ---
  # Name the current run
- run: subs_1_2_5_7
+ run: all_subjects_3
 
  info: | 
+     larger batch size (256 vs 64)
+     AdamW
+     SINGLE ENCODER
      layer norm dense and lstm
      using proper split
      using standard lstm
@@ -26,7 +29,7 @@
 
  # Training
  epochs: 100
- batch_size: 64
+ batch_size: 256
  max_length: 15
  top_k: 5000 # vocab size
  optimizer: Adam

@@ -64,19 +64,19 @@ vocab_size = config['top_k'] + 1
 #
 ## Load data
 #
-train_keys, val_keys, test_keys = loader.get_nsd_keys('1')
+train_keys, val_keys, test_keys = loader.get_nsd_keys('2')
 print("train_keys:", train_keys.shape)
 print("val_keys:", val_keys.shape)
 print("test_keys:", test_keys.shape)
 
 # Create pairs
-train_pairs = np.array(loader.create_pairs(train_keys, subj='1'))
-val_pairs = np.array(loader.create_pairs(val_keys, subj='1'))
+train_pairs = np.array(loader.create_pairs(train_keys, subj='2'))
+val_pairs = np.array(loader.create_pairs(val_keys, subj='2'))
 print("train_pairs:", train_pairs.shape)
 print("val_pairs:  ", val_pairs.shape)
 
 # Load Betas
-train_betas, val_betas, _ = loader.load_split_betas('1')
+train_betas, val_betas, _ = loader.load_split_betas('2')
 print("train_betas:", train_betas.shape)
 print("val_betas:", val_betas.shape)
 

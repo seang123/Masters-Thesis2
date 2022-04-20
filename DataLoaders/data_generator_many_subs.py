@@ -66,9 +66,9 @@ class DataGenerator(keras.utils.Sequence):
 
     def on_epoch_end(self):
         """ Shuffle data when epoch ends """
-        if self.shuffle:
-            np.random.shuffle(self.pairs)
-            loggerA.info("shuffling dataset")
+        #if self.shuffle:
+        #    np.random.shuffle(self.pairs)
+        #    loggerA.info("shuffling dataset")
 
         self.batchify(self.pairs)
         loggerA.info("Batchifying data")
@@ -93,16 +93,12 @@ class DataGenerator(keras.utils.Sequence):
         batch_size = nsd_key.shape[0]
 
         # Pre-allocate memory
-        betas_batch = np.zeros((batch_size, 327684), dtype=np.float32)
+        betas_batch = np.zeros((8, batch_size, 327684), dtype=np.float32)
 
-        sub_id = {'1':0, '2':1, '5':2, '7':3} # ordering of subjects in the stacked betas np.array (n_subs, 9000, 327684) <- train_betas
-        cur_sub_id = sub_id[sub[0]]
+        cur_sub = int(sub[0])-1
 
-        encoder = f"dense_in_{cur_sub_id}"
-
-        # Load data
-        for k, i in enumerate(idx):
-            betas_batch[k] = self.betas[cur_sub_id, i,:]
+        for k, v in enumerate(idx):
+            betas_batch[i] = self.betas[cur_sub-1][v,:]
 
         # Tokenize captions
         cap_seqs = self.tokenizer.texts_to_sequences(cap) # int32
@@ -116,14 +112,6 @@ class DataGenerator(keras.utils.Sequence):
         # Init LSTM
         init_state = tf.zeros([batch_size, self.units], dtype=np.float32)
 
-        if self.training:
-            return ((betas_batch, cap_vector, init_state, init_state), target)
-        else:
-            return ((betas_batch, cap_vector, init_state, init_state), target, nsd_key)
-
-
-
-
-
+        return ((betas_batch, cap_vectors, init_states, init_states), target)
 
 

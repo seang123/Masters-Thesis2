@@ -238,8 +238,8 @@ def get_nsd_keys(subj: str = '2') -> (list, list):
     #test = df_test['nsd_key'].values
     test = df['nsd_key'].loc[df['is_test']==1].values
 
-    assert len(unq) == 9000, "incorrect amount of unq keys"
-    assert len(shrd) == 1000, "incorrect amount of shrd keys"
+    #assert len(unq) == 9000, "incorrect amount of unq keys"
+    #assert len(shrd) == 1000, "incorrect amount of shrd keys"
     assert len(test) == 515, f"incorrect amount of test keys: {len(test)}"
 
     # remove test keys from val set
@@ -340,22 +340,27 @@ def load_subs(subs = [1,2,3,4,5,6,7,8]):
     train_pairs = []
     val_pairs = []
     test_pairs = []
-    train_betas = []
-    val_betas = []
-    test_betas = []
+    train_betas = {}
+    val_betas = {}
+    test_betas = {}
     for sub in subs:
         train_keys, val_keys, test_keys = get_nsd_keys(str(sub))
         train_pair = np.array(create_pairs(train_keys, str(sub)))
-        val_pair   = np.array(create_pairs(val_keys, str(subs))
-        test_pair  = np.array(create_pairs(test_keys, str(subs)))
+        val_pair   = np.array(create_pairs(val_keys, str(sub)))
+        test_pair  = np.array(create_pairs(test_keys, str(sub), single=True))
         train_pairs.append(train_pair)
         val_pairs.append(val_pair)
         test_pairs.append(test_pair)
 
         train_beta, val_beta, test_beta = load_split_betas(str(sub))
-        train_betas.append(train_beta)
-        val_betas.append(val_beta)
-        test_betas.append(test_beta)
+        #train_betas.append(train_beta)
+        #val_betas.append(val_beta)
+        #test_betas.append(test_beta)
+        train_betas[str(sub)] = train_beta
+        val_betas[str(sub)] = val_beta
+        test_betas[str(sub)] = test_beta
+        print("sub:", sub)
+        print("train, val, test:", train_beta.shape, "-", val_beta.shape, "-", test_beta.shape)
 
     return train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas
 
