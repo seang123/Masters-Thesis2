@@ -12,8 +12,8 @@ import tqdm
 from Model import lc_NIC
 #from Model import tmp_lc_NIC as lc_NIC
 from DataLoaders import load_avg_betas2 as loader
-#from DataLoaders import data_generator as generator
-from DataLoaders import data_generator_ms_sing_enc as generator
+from DataLoaders import data_generator as generator
+#from DataLoaders import data_generator_ms_sing_enc as generator
 #from tabulate import tabulate
 import argparse
 from itertools import groupby
@@ -73,18 +73,15 @@ batch_size = 64
 
 ## ======= Load data =========
 
-"""
 train_keys, val_keys, test_keys = loader.get_nsd_keys(subject)
 print("train_keys:", train_keys.shape)
 print("val_keys:", val_keys.shape)
 print("test_keys:", test_keys.shape)
-"""
 
 #tokenizer = loader.load_tokenizer()
 tokenizer, _ = loader.build_tokenizer(np.arange(1, 73001), config['top_k'])
 #tokenizer, _ = loader.build_tokenizer(np.concatenate((train_keys, val_keys)), config['top_k'])
 
-"""
 train_pairs = loader.create_pairs(train_keys, subj=subject, single=True)
 val_pairs   = loader.create_pairs(val_keys, subj=subject, single=True)
 test_pairs   = loader.create_pairs(test_keys, subj=subject, single=True)
@@ -92,14 +89,15 @@ print(f"train_pairs: {len(train_pairs)}")
 print(f"val_pairs  : {len(val_pairs)}")
 print(f"test_pairs : {len(test_pairs)}")
 
-_, _, test_betas = loader.load_split_betas('2')
+_, _, test_betas = loader.load_split_betas(subject)
 print("test_betas:", test_betas.shape)
-"""
 
+"""
 train_pairs, val_pairs, test_pairs, _, _, test_betas = loader.load_subs([1,2,3,4,5,6,7,8])
 test_pairs = np.concatenate(test_pairs, axis=0)
 print("test pairs:", test_pairs.shape)
 print("test betas:", len(test_betas))
+"""
 
 
 def remove_dup_pairs(pairs):

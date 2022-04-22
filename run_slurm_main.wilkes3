@@ -10,7 +10,7 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J all_subs_single_encoder
+#SBATCH -J subject_5_baseline
 #! Which project should be charged (NB Wilkes2 projects end in '-GPU'):
 #SBATCH -A KIETZMANN-SL3-GPU
 #! How many whole nodes should be allocated?
@@ -22,7 +22,7 @@
 #! Note that the job submission script will enforce no more than 32 cpus per GPU.
 #SBATCH --gres=gpu:1
 #! How much wallclock time will be required?
-#SBATCH --time=12:00:00
+#SBATCH --time=05:00:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-user=seanpgies@gmail.com
 #SBATCH --mail-type=FAIL
@@ -58,7 +58,8 @@ module load python/3.8 cuda/11.0 cudnn/8.0_cuda-11.1 slurm
 source /home/hpcgies1/rds/hpc-work/tf24/bin/activate
 
 #! Full path to application executable: 
-application="python /home/hpcgies1/Masters-Thesis/AttemptFour/main_ms_single_enc.py"
+#application="python /home/hpcgies1/Masters-Thesis/AttemptFour/main_ms_single_enc.py"
+application="python /home/hpcgies1/Masters-Thesis/AttemptFour/main.py"
 
 #! Run options for the application:
 #options="--dir subject_2_layer_norm --e 20"

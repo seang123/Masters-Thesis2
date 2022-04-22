@@ -1,12 +1,9 @@
 ---
  # Name the current run
- run: all_subjects_3
+ run: subject_5_baseline
 
  info: | 
-     larger batch size (256 vs 64)
-     AdamW
-     SINGLE ENCODER
-     layer norm dense and lstm
+     no layer norm
      using proper split
      using standard lstm
      using only 485 validation samples, rest is test set
@@ -29,7 +26,7 @@
 
  # Training
  epochs: 100
- batch_size: 256
+ batch_size: 64
  max_length: 15
  top_k: 5000 # vocab size
  optimizer: Adam
@@ -46,7 +43,7 @@
 
  input_reg: 0.01         # scientific notation requires decimal notation - x.0e
  attn_reg: 0.001
- lstm_reg: 0.003 # 0.00003
+ lstm_reg: 0.00003
  output_reg: 0.00001 
 
  # Input size

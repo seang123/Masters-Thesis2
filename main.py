@@ -64,19 +64,19 @@ vocab_size = config['top_k'] + 1
 #
 ## Load data
 #
-train_keys, val_keys, test_keys = loader.get_nsd_keys('2')
+train_keys, val_keys, test_keys = loader.get_nsd_keys('5')
 print("train_keys:", train_keys.shape)
 print("val_keys:", val_keys.shape)
 print("test_keys:", test_keys.shape)
 
 # Create pairs
-train_pairs = np.array(loader.create_pairs(train_keys, subj='2'))
-val_pairs = np.array(loader.create_pairs(val_keys, subj='2'))
+train_pairs = np.array(loader.create_pairs(train_keys, subj='5'))
+val_pairs = np.array(loader.create_pairs(val_keys, subj='5'))
 print("train_pairs:", train_pairs.shape)
 print("val_pairs:  ", val_pairs.shape)
 
 # Load Betas
-train_betas, val_betas, _ = loader.load_split_betas('2')
+train_betas, val_betas, _ = loader.load_split_betas('5')
 print("train_betas:", train_betas.shape)
 print("val_betas:", val_betas.shape)
 
@@ -84,8 +84,8 @@ print("val_betas:", val_betas.shape)
 tokenizer, _ = loader.build_tokenizer(np.arange(1, 73001), config['top_k'])
 
 #cos_decay = schedules.CosineDecay(initial_learning_rate=0.001, decay_steps=1000, alpha=0.01, name=None )
-initial_lr = 0.1 * (config['batch_size'] / 256)
-lr_decay = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=0.1, decay_steps=1000, decay_rate=0.009, staircase=False, name=None)
+#initial_lr = 0.1 * (config['batch_size'] / 256)
+#lr_decay = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=0.1, decay_steps=1000, decay_rate=0.009, staircase=False, name=None)
 #lr_decay = tf.keras.experimental.LinearCosineDecay(initial_learning_rate=0.001, decay_steps=1000, num_periods=0.5, alpha=0.0, beta = 1e-3, name=None)
 
 def lr_schedule(step):

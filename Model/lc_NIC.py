@@ -330,12 +330,10 @@ class NIC(tf.keras.Model):
     @tf.function()
     def train_step(self, data):
         """ Single backprop train step
-
         Parameters
         ----------
             data : tuple
                 holds the features, caption, init_state, guse, and target
-
         Returns
         -------
             dict
@@ -412,12 +410,10 @@ class NIC(tf.keras.Model):
     @tf.function
     def test_step(self, data):
         """ Called during validation
-
         Parameters
         ----------
             data : tuple
                 holds the features, caption, init_state, and target
-
         Returns
         -------
             dict
@@ -470,7 +466,6 @@ class NIC(tf.keras.Model):
     @tf.function
     def accuracy_calculation(self, real, pred):
         """ Compute categorical accuracy
-
         Parameters
         ----------
             real : ndarray - one-hot
@@ -498,7 +493,6 @@ class NIC(tf.keras.Model):
 
     def cosine_loss(self, x, y):
         """ Return the cosine similarity as a loss value
-
         The value ranges between 1 and 0, and is 0 if x == y
         """
         return 1 - self.cosine_similarity(x, y)
@@ -578,9 +572,7 @@ class NIC(tf.keras.Model):
 
     def greedy_predict_attention(self, img_input, a0, c0, start_seq, max_len, units, tokenizer, training=False):
         """ Make a prediction for a set of features and start token
-
         Should be fed directly from the data generator
-
         Parameters
         ----------
         Returns
@@ -588,7 +580,6 @@ class NIC(tf.keras.Model):
             outputs : ndarray
                 holds the words produced for each caption/batch
             attention-scores : ndarray
-
         """
         assert training == False, "training is set to True"
 
@@ -715,12 +706,10 @@ class NIC(tf.keras.Model):
     @tf.function()
     def train_step_sam(self, data):
         """ Single backprop train step
-
         Parameters
         ----------
             data : tuple
                 holds the features, caption, init_state, guse, and target
-
         Returns
         -------
             dict
@@ -838,6 +827,4 @@ class NIC(tf.keras.Model):
         self.optimizer.apply_gradients(zip(gradients, trainable_variables))
 
         return {"loss": cross_entropy_loss, 'L2': l2_loss, 'accuracy': accuracy, 'attention': attn_loss, 'lr':self.optimizer.lr}#, grad_sum
-
-
 

@@ -5,7 +5,6 @@ from tensorflow.keras.activations import tanh
 
 class Attention(tf.keras.layers.Layer):
     """ True attention as done in Show, Attend, and Tell
-
     Given the hidden state of the lstm at t_i, and a set of features
     return the input for the LSTM on the next timestep t_i+1
     """
@@ -44,5 +43,25 @@ class Attention(tf.keras.layers.Layer):
 
         return context_vector, attention_weights, attention_hidden_layer
 
+def LuongAttention:
+    def __init__(self, **kwargs):
+        pass
+    def call(self, q, v, training=False):
+        """ Dot-product attention (luong style)
+        Parameters:
+        -----------
+            q (query) - ndarray
+                LSTM hidden state [bs, Tq, dim] (bs, 1, 512)
+            v (value) - ndarray
+                Encoded neural features [bs, Tv, dim] (bs, 360, 512)
+        Return:
+        -------
+            output - ndarray
+                scalled output [bs, Tq, dim]
+            attention scores - ndarray
+                attention scores [bs, Tq, Tv]
+        """
 
-
+        q = tf.expand_dims(hidden, 1)
+        output, attention_scores = tf.keras.layers.Attention()([q, v], return_attention_scores=True, training=training)
+        return output, attention_scores
