@@ -100,6 +100,14 @@ class NIC(tf.keras.Model):
             kernel_regularizer=self.l2_attn,
             #name = 'attention'
         )
+        """
+        self.attention = attention.LuongAttention(
+            units=32,
+            activation=LeakyReLU(0.2),
+            kernel_initializer='he_normal',
+            kernel_regularizer=self.l2_attn,
+        )
+        """
 
         # Text input
         self.embedding = Embedding(
@@ -112,7 +120,7 @@ class NIC(tf.keras.Model):
         )
 
         # LSTM layer
-        use_layer_norm = True
+        use_layer_norm = False
         if not use_layer_norm:
             print("-- Using standard LSTM --")
             self.lstm = LSTM(units,
@@ -244,7 +252,7 @@ class NIC(tf.keras.Model):
         # Pass through LSTM
         for i in range(text.shape[1]):
             # compute attention context
-            context, attn_scores, _ = self.attention(a, features, training=training)
+            context, attn_scores = self.attention(a, features, training=training)
             context = self.expand(context) # (bs, 1, group_size)
 
             #attention_scores += attn_scores
@@ -262,7 +270,9 @@ class NIC(tf.keras.Model):
         output = self.dense_out(self.dropout_output(self.dense_inter(output, training=training), training=training), training=training) # (bs, max_len, vocab_size)
         #output = self.dense_out(self.dropout_output(self.inter_ln(self.dense_inter(output, training=training), training=training), training=training), training=training) # (bs, max_len, vocab_size)
 
-        return output, tf.convert_to_tensor(attention_scores)
+        attention_scores = tf.convert_to_tensor(attention_scores)
+        #attention_scores = tf.transpose(attention_scores, [0,1,3,2]) # for dot-prod attention
+        return output, attention_scores
 
     def call_lc(self, data, training=False):
         """ Forward Pass | locally connected without attention """
@@ -588,7 +598,8 @@ class NIC(tf.keras.Model):
 
         text = self.embedding(start_seq)
         text = self.dropout_text(text, training=training)
-        text = self.expand(text)
+        #text = self.expand(text)
+        text = tf.expand_dims(text, axis=1)
 
         a = a0
         c = c0
@@ -598,16 +609,17 @@ class NIC(tf.keras.Model):
         outputs = []
         outputs_raw = []
         for i in range(max_len):
-            context, attention_score, attention_weight = self.attention(a, features, training=training)
+            context, attention_score = self.attention(a, features, training=training)
             context = self.expand(context)
             attention_scores.append( np.array(attention_score) )
-            attention_weights.append( np.array(attention_weight) )
+            #attention_weights.append( np.array(attention_weight) )
 
             # Plot attention
 
             sample = tf.concat([context, text], axis=-1)
             _, a, c = self.lstm(sample, initial_state=[a,c], training=training)
-            seq = self.expand(a)
+            #seq = self.expand(a)
+            seq = tf.expand_dims(a, axis=1)
             seq = self.dropout_lstm(seq, training=training)
 
             # Dense-Decoder
@@ -628,7 +640,7 @@ class NIC(tf.keras.Model):
         outputs = np.stack(outputs, axis=1)
         outputs_raw = np.concatenate(outputs_raw, axis=1)
         assert outputs.shape == (features.shape[0], max_len, 1)
-        return outputs, outputs_raw, np.array(attention_scores), np.array(attention_weights)
+        return outputs, outputs_raw, np.array(attention_scores)#, np.array(attention_weights)
 
     def beam_search(self, features, start_seq, max_len, units):
 

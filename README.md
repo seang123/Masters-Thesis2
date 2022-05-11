@@ -14,3 +14,7 @@ TOD0:
     - done
 
 - Run naive model (no teacher forcing)
+
+- Subject 5 baseline
+
+- All subjects baseline

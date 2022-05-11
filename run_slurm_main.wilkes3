@@ -10,9 +10,9 @@
 
 #! sbatch directives begin here ###############################
 #! Name of the job:
-#SBATCH -J subject_5_baseline
+#SBATCH -J sub5
 #! Which project should be charged (NB Wilkes2 projects end in '-GPU'):
-#SBATCH -A KIETZMANN-SL3-GPU
+#SBATCH -A KIETZMANN-SL2-GPU
 #! How many whole nodes should be allocated?
 #SBATCH --nodes=1
 #! How many (MPI) tasks will there be in total?

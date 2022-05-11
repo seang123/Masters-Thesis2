@@ -74,10 +74,6 @@ class DataGenerator(keras.utils.Sequence):
         """
         betas_batch = self.betas[idx,:]
 
-        prob = np.random.uniform(0, 1)
-        noise = np.random.normal(0, 0.05, betas_batch.shape)
-        betas_batch += (noise * prob)
-
         # Tokenize captions
         cap_seqs = self.tokenizer.texts_to_sequences(cap) # int32
         cap_vector = tf.keras.preprocessing.sequence.pad_sequences(cap_seqs, maxlen = self.max_len, truncating = 'post', padding = 'post')

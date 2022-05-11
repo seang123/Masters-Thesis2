@@ -1,6 +1,6 @@
 ---
  # Name the current run
- run: subject_5_baseline
+ run: subject_7_baseline
 
  info: | 
      no layer norm
@@ -54,9 +54,9 @@
      mscoco: 4096
 
  # Model size 
- units: 512 # 2048 # lstm
+ units: 512 # 512 # 2048 # lstm
  attn_units: 32
- group_size: 32 # acts as embedding dim for attention model
+ group_size: 32 # 32 # acts as embedding dim for attention model
  embedding_features: 512
  embedding_text: 512
 

@@ -41,11 +41,13 @@ class Attention(tf.keras.layers.Layer):
 
         context_vector = tf.reduce_sum(attention_weights * features, axis=1) # (bs, embed_dim)
 
-        return context_vector, attention_weights, attention_hidden_layer
+        return context_vector, attention_weights#, attention_hidden_layer
 
-def LuongAttention:
-    def __init__(self, **kwargs):
-        pass
+class LuongAttention(tf.keras.layers.Layer):
+    def __init__(self, units: int, **kwargs):
+        super(LuongAttention, self).__init__()
+        self.downscale = tf.keras.layers.Dense(units, **kwargs)
+
     def call(self, q, v, training=False):
         """ Dot-product attention (luong style)
         Parameters:
@@ -62,6 +64,7 @@ def LuongAttention:
                 attention scores [bs, Tq, Tv]
         """
 
-        q = tf.expand_dims(hidden, 1)
+        q = tf.expand_dims(q, 1)
+        q = self.downscale(q, training=training) # Downscale hidden state from 512 to 32
         output, attention_scores = tf.keras.layers.Attention()([q, v], return_attention_scores=True, training=training)
         return output, attention_scores

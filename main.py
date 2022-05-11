@@ -61,22 +61,24 @@ print(f"Model file copied to {run_path} for record", flush=True)
 ## Parameters
 vocab_size = config['top_k'] + 1
 
+subject = '7'
+print(">> subject: ", subject)
 #
 ## Load data
 #
-train_keys, val_keys, test_keys = loader.get_nsd_keys('5')
+train_keys, val_keys, test_keys = loader.get_nsd_keys(subject)
 print("train_keys:", train_keys.shape)
 print("val_keys:", val_keys.shape)
 print("test_keys:", test_keys.shape)
 
 # Create pairs
-train_pairs = np.array(loader.create_pairs(train_keys, subj='5'))
-val_pairs = np.array(loader.create_pairs(val_keys, subj='5'))
+train_pairs = np.array(loader.create_pairs(train_keys, subj=subject))
+val_pairs = np.array(loader.create_pairs(val_keys, subj=subject))
 print("train_pairs:", train_pairs.shape)
 print("val_pairs:  ", val_pairs.shape)
 
 # Load Betas
-train_betas, val_betas, _ = loader.load_split_betas('5')
+train_betas, val_betas, _ = loader.load_split_betas(subject)
 print("train_betas:", train_betas.shape)
 print("val_betas:", val_betas.shape)
 
