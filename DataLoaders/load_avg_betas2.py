@@ -326,6 +326,10 @@ def load_split_betas(subj = '2'):
         else:
             train_idx.append(i)
 
+    train_idx = np.array(train_idx)
+    val_idx   = np.array(val_idx)
+    test_idx  = np.array(test_idx)
+
     s = time.time()
     betas = np.load(open(f"/home/hpcgies1/rds/hpc-work/NIC/Data/subj0{subj}/betas_averaged/all_betas.npy", "rb"))
     print(f"Load betas: {(time.time() - s):.3f}")
@@ -352,15 +356,14 @@ def load_subs(subs = [1,2,3,4,5,6,7,8]):
         val_pairs.append(val_pair)
         test_pairs.append(test_pair)
 
+        start_t = time.time()
         train_beta, val_beta, test_beta = load_split_betas(str(sub))
-        #train_betas.append(train_beta)
-        #val_betas.append(val_beta)
-        #test_betas.append(test_beta)
         train_betas[str(sub)] = train_beta
         val_betas[str(sub)] = val_beta
         test_betas[str(sub)] = test_beta
         print("sub:", sub)
         print("train, val, test:", train_beta.shape, "-", val_beta.shape, "-", test_beta.shape)
+        print(f"Load betas: {(time.time() - start_t):.3f}")
 
     return train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas
 

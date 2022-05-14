@@ -254,9 +254,10 @@ class NIC(tf.keras.Model):
             # compute attention context
             context, attn_scores = self.attention(a, features, training=training)
             context = self.expand(context) # (bs, 1, group_size)
+            #context = self.expand(tf.reduce_mean(features, axis=1)) # For LC model
 
-            #attention_scores += attn_scores
-            attention_scores.append( attn_scores )
+            #attention_scores.append( attn_scores )
+            attention_scores.append( tf.zeros((context.shape[0], context.shape[1], 1)) )
 
             # combine context with word
             sample = tf.concat([context, tf.expand_dims(text[:, i, :], axis=1)], axis=-1) # (bs, 1, embed_features + embed_text)
@@ -268,7 +269,6 @@ class NIC(tf.keras.Model):
 
         # Convert to vocab
         output = self.dense_out(self.dropout_output(self.dense_inter(output, training=training), training=training), training=training) # (bs, max_len, vocab_size)
-        #output = self.dense_out(self.dropout_output(self.inter_ln(self.dense_inter(output, training=training), training=training), training=training), training=training) # (bs, max_len, vocab_size)
 
         attention_scores = tf.convert_to_tensor(attention_scores)
         #attention_scores = tf.transpose(attention_scores, [0,1,3,2]) # for dot-prod attention

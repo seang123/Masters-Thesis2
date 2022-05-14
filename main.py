@@ -21,14 +21,6 @@ import yaml
 gpu_to_use = 0
 print(f"Running on GPU: {gpu_to_use}", flush=True)
 
-# Allow memory growth on GPU devices
-#physical_devices = tf.config.experimental.list_physical_devices('GPU')
-#print(physical_devices, flush=True)
-#for i in range(0, len(physical_devices)):
-#    tf.config.experimental.set_memory_growth(physical_devices[i], True)
-#tf.config.set_visible_devices(physical_devices[gpu_to_use], 'GPU')
-
-#thesis_dir = "/home/hpcgies1/rds/hpc-work/NIC/Masters-Thesis/AttemptFour/"
 thesis_dir = "/home/hpcgies1/Masters-Thesis/AttemptFour/"
 
 ## Load the configuration file
@@ -61,7 +53,7 @@ print(f"Model file copied to {run_path} for record", flush=True)
 ## Parameters
 vocab_size = config['top_k'] + 1
 
-subject = '7'
+subject = '2'
 print(">> subject: ", subject)
 #
 ## Load data
@@ -85,30 +77,9 @@ print("val_betas:", val_betas.shape)
 #tokenizer = loader.load_tokenizer()
 tokenizer, _ = loader.build_tokenizer(np.arange(1, 73001), config['top_k'])
 
-#cos_decay = schedules.CosineDecay(initial_learning_rate=0.001, decay_steps=1000, alpha=0.01, name=None )
-#initial_lr = 0.1 * (config['batch_size'] / 256)
-#lr_decay = tf.keras.optimizers.schedules.ExponentialDecay(initial_learning_rate=0.1, decay_steps=1000, decay_rate=0.009, staircase=False, name=None)
-#lr_decay = tf.keras.experimental.LinearCosineDecay(initial_learning_rate=0.001, decay_steps=1000, num_periods=0.5, alpha=0.0, beta = 1e-3, name=None)
-
-def lr_schedule(step):
-    # final lr = initial_lr * decay_rate
-    decay_steps = 10
-    decay_rate = 0.01
-    inital_lr = 0.01
-    final_lr = 0.0001
-    return 0.0001
-    #return max(inital_lr * decay_rate ** (step / decay_steps), final_lr)
-
 # Setup optimizer
-if config['optimizer'] == 'Adam':
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1 = 0.9, beta_2=0.98, epsilon=10.0e-9, clipnorm=config['clipnorm'])
-    #optimizer = tfa.optimizers.AdamW(0.001, config['alpha'], beta_1 = 0.9, beta_2 = 0.98, epsilon = 10.0e-09)
-    print(f"Using optimizer: Adam", flush=True)
-elif config['optimizer'] == 'SGD':
-    optimizer = tf.keras.optimizers.SGD(learning_rate=config['alpha'], momentum=0.9, nesterov=False)
-    print(f"Using optimizer: SGD", flush=True)
-else:
-    print("No optimizer specified", flush=True)
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1 = 0.9, beta_2=0.98, epsilon=10.0e-9, clipnorm=config['clipnorm'])
+print(f"Using optimizer: Adam", flush=True)
 
 # Loss function
 loss_object = tf.keras.losses.CategoricalCrossentropy(
@@ -158,21 +129,6 @@ print(temp[0].shape)
 model(temp, training=False)
 print(f"Model build time: {(time.perf_counter() - build_time):.3f}", flush=True)
 print(model.summary(), flush=True)
-if False:
-    # 1. Make one pass through the model
-    model(init_generator.__getitem__(0)[0])
-    print(model.summary(), flush=True)
-    # 2. Load weights
-    pre_trained_weights = np.load('./Log/vgg16_all_samples/pre_train_weights.npy', allow_pickle=True)
-    for i in pre_trained_weights:
-        print(i.shape)
-    lstm_weights = pre_trained_weights[-5:-2]
-    time_dist_weights = pre_trained_weights[-2:]
-    # 3. Set LSTM layer weights
-    model.get_layer('lstm').set_weights(lstm_weights)
-    model.get_layer('time_distributed_softmax').set_weights(time_dist_weights)
-    print("Weights loaded for: LSTM & Time-distributed-softmax")
-
 
 
 # Setup Checkpoint handler
@@ -189,51 +145,23 @@ checkpoint_best = ModelCheckpoint(
         mode='min',
         period=1
 )
-checkpoint_path_latest = f"{checkpoint_path}model-latest.h5"
-checkpoint_latest = ModelCheckpoint(
-        checkpoint_path_latest,
-        monitor='val_loss',
-        verbose=0,
-        save_weights_only = True,
-        save_best_only = False,
-        mode = 'min',
-        period=1
-)
 
 #
 ## Callbacks
 #
-#batch_loss_writer = BatchLoss.BatchLoss(f"{run_path}/batch_training_log.csv", f"{run_path}")
-#epoch_loss_writer = EpochLoss.EpochLoss(f"{run_path}/training_log.csv")
 loss_history = EpochLoss.LossHistory(f"{run_path}/loss_history.csv", f"{run_path}")
-
-#early_stop = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=5)
-#reduce_lr = ReduceLROnPlateau(monitor='val_loss', verbose=1, factor=0.1, patience=10, min_delta=0.005, min_lr=0.0001)
 
 logdir = f"./tb_logs/scalars/{config['run']}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 tensorboard_callback = TensorBoard(
         log_dir=logdir,
-        update_freq='batch',
-        #histogram_freq=1,
-        #write_graph=True,
-        #write_images=True,
-        #embeddings_freq=1,
-        #profile_batch='200,220',
-        )
-#file_writer = tf.summary.create_file_writer(logdir)
+        update_freq='batch')
 
-# Init a generator used during the predict callback
-#val_generator_pred = create_generator(val_pairs, False)
-#predict_callback = Predict.Predict(val_generator_pred, tokenizer, file_writer, config['max_length'], config['units'])
-
-lr_scheduler = tf.keras.callbacks.LearningRateScheduler(
-        lr_schedule, verbose = 0)
+#lr_scheduler = tf.keras.callbacks.LearningRateScheduler(
+#        lr_schedule, verbose = 0)
 
 _callbacks = [
-        lr_scheduler,
         loss_history,
         #tensorboard_callback,
-        #checkpoint_latest,
         checkpoint_best,
 ]
 callbacks = tf.keras.callbacks.CallbackList(
@@ -265,14 +193,6 @@ def dotfit():
             vocab_size,
             pre_load_betas=False,
             shuffle=False, training=True)
-
-    """
-    model_name = './Log/no_attn_loss_const_lr2/model/model-ep114.h5'
-    start_epoch = 20
-    print(f"loading weights from:\n\t {model_name}")
-    print(f"starting training from epoch: {start_epoch}")
-    model.load_weights(model_name,by_name=True,skip_mismatch=True)
-    """
 
     model.fit(
             train_generator,
