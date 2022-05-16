@@ -15,9 +15,6 @@ class Attention(tf.keras.layers.Layer):
         self.softmax = tf.keras.layers.Softmax(axis=1)
         self.dropout = dropout
 
-        #self.bn = tf.keras.layers.BatchNormalization(name = 'attention_bn')
-        #self.bn = tf.keras.layers.LayerNormalization(name = 'attention_ln')
-
         self.W1 = tf.keras.layers.Dense(units, **kwargs)
         self.W2 = tf.keras.layers.Dense(units, **kwargs)
         self.V  = tf.keras.layers.Dense(1)
@@ -32,7 +29,6 @@ class Attention(tf.keras.layers.Layer):
                 self.W2(hidden_with_time_axis, training=training)
         ) # (bs, regions, attn_units)
 
-        #attention_hidden_layer = self.bn(attention_hidden_layer, training=training)
         attention_hidden_layer = self.dropout(attention_hidden_layer, training=training)
 
         score = self.V(attention_hidden_layer, training=training) # (bs, regions, 1)

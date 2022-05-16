@@ -30,21 +30,21 @@ class Dataset(torch.utils.data.Dataset):
         nsd_key, cap, idx, sub = self.pairs[index]
         idx = idx.astype(np.int32)
         # Get beta
-        betas = torch.from_numpy(self.betas[idx,:].astype(np.float32)).to(self.device)
+        betas = torch.from_numpy(self.betas[idx,:].astype(np.float32)) # [327684]
 
         # Tokenize caption
         cap_seqs = self.tokenizer.texts_to_sequences([cap])
-        cap_vector = pad_sequences(cap_seqs, maxlen=self.maxlen, truncating='post', padding='post')[0]
+        cap_vector = pad_sequences(cap_seqs, maxlen=self.maxlen, truncating='post', padding='post')[0] # [15]
 
         # Create target
         target = np.zeros_like(cap_vector, dtype=cap_vector.dtype)
         target[:-1] = cap_vector[1:]
-        target = to_categorical(target, self.vocab_size)
+        target = to_categorical(target, self.vocab_size) # [15]
 
         # init state
-        init_state = torch.zeros(self.units, dtype=torch.float32).to(self.device)
+        init_state = torch.zeros(self.units, dtype=torch.float32) # [512]
 
-        target = torch.from_numpy(target).to(self.device)
-        cap_vector = torch.from_numpy(cap_vector).to(self.device)
+        target = torch.from_numpy(target)
+        cap_vector = torch.from_numpy(cap_vector)
 
         return betas, cap_vector, init_state, init_state, target

@@ -47,18 +47,20 @@ np.random.seed(config['seed'])
 tf.random.set_seed(config['seed'])
 
 # Copy Model file to run_path folder for record
-subprocess.run(["cp", "/home/hpcgies1/Masters-Thesis/AttemptFour/Model/lc_NIC.py", f"{run_path}/lc_NIC.py"], shell=False, check=True)
+subprocess.run(["cp", "-r", "/home/hpcgies1/Masters-Thesis/AttemptFour/Model", f"{run_path}/Model_files"], shell=False, check=True)
 print(f"Model file copied to {run_path} for record", flush=True)
 
 ## Parameters
 vocab_size = config['top_k'] + 1
 
-subject = '2'
-print(">> subject: ", subject)
+subject = '5'
+print(">> subject: ", subject, " <<")
 #
 ## Load data
 #
 train_keys, val_keys, test_keys = loader.get_nsd_keys(subject)
+print("train_keys:", train_keys[:10])
+print("val_keys:", val_keys[:10])
 print("train_keys:", train_keys.shape)
 print("val_keys:", val_keys.shape)
 print("test_keys:", test_keys.shape)
@@ -202,11 +204,7 @@ def dotfit():
             callbacks = _callbacks,
             validation_data = val_generator,
             validation_steps = len(val_pairs)//config['batch_size'],
-            initial_epoch = start_epoch,
-            #max_queue_size= 20,
-            #workers= 10,
-            #use_multiprocessing=True,
-    )
+            initial_epoch = start_epoch)
     return
 
 

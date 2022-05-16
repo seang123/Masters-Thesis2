@@ -143,7 +143,6 @@ class NIC(tf.keras.Model):
                     name='lstm'
             )
 
-        #self.inter_ln = tf.keras.layers.LayerNormalization()
         # Intermediary output dense layer
         self.dense_inter = TimeDistributed(
             Dense(
@@ -171,9 +170,6 @@ class NIC(tf.keras.Model):
 
     def call(self, data, training=False):
         return self.call_attention(data, training)
-        #return self.call_naive_attention(data, training)
-        #return self.call_lc(data, training)
-        #return self.call_fc(data, training)
 
     def learn_init_state(self, features):
         """ Proposed by Xu et al. init the LSTM h,c state as MLP(mean(features))"""
@@ -245,29 +241,30 @@ class NIC(tf.keras.Model):
         a = tf.convert_to_tensor(a0) # (bs, units)
         c = tf.convert_to_tensor(c0)
 
-        #attention_scores = tf.zeros((features.shape[0], features.shape[1], 1), dtype=tf.float32)
+        # Store
         attention_scores = []
-
         output = []
+
         # Pass through LSTM
         for i in range(text.shape[1]):
-            # compute attention context
+
+            # Attention context
             context, attn_scores = self.attention(a, features, training=training)
             context = self.expand(context) # (bs, 1, group_size)
-            #context = self.expand(tf.reduce_mean(features, axis=1)) # For LC model
-
-            #attention_scores.append( attn_scores )
-            attention_scores.append( tf.zeros((context.shape[0], context.shape[1], 1)) )
 
             # combine context with word
             sample = tf.concat([context, tf.expand_dims(text[:, i, :], axis=1)], axis=-1) # (bs, 1, embed_features + embed_text)
 
+            # LSTM
             _, a, c = self.lstm(sample, initial_state=[a,c], training=training)
+
+            # Store data
             output.append(self.dropout_lstm(a, training=training))
+            attention_scores.append( attn_scores )
 
         output = tf.stack(output, axis=1) # (bs, max_len, embed_dim)
 
-        # Convert to vocab
+        # Convert to vocab (Dense-Decoder)
         output = self.dense_out(self.dropout_output(self.dense_inter(output, training=training), training=training), training=training) # (bs, max_len, vocab_size)
 
         attention_scores = tf.convert_to_tensor(attention_scores)
@@ -398,36 +395,20 @@ class NIC(tf.keras.Model):
         #gradients = agc.adaptive_clip_grad(trainable_variables, gradients, clip_factor=0.01, eps = 1e-3)
         self.optimizer.apply_gradients(zip(gradients, trainable_variables))
 
-
-        #cc = 0
-        #for grad in gradients:
-        #    if cc % 2 == 0:
-        #       print(">", grad.name, "--", grad.shape)
-        #   else:
-        #        print(grad.name, "--", grad.shape)
-        #    cc += 1
-        #raise Exception("stop")
-        #grad_sum = []
-        #cc = 0
-        #for grad in gradients:
-        #    #if cc % 2 == 0:
-        #    grad_sum.append( tf.reduce_sum(tf.math.square(grad), axis=0).numpy() ) # first part of Euclidean norm
-        #    #grad_sum.append(tf.reduce_mean(grad, axis=0).numpy())
-        #    #cc += 1
-
         return {"loss": cross_entropy_loss, 'L2': l2_loss, 'accuracy': accuracy, 'attention': attn_loss, 'lr':self.optimizer.lr}#, grad_sum
 
     @tf.function
     def test_step(self, data):
         """ Called during validation
-        Parameters
-        ----------
+            Parameters
+            ----------
             data : tuple
                 holds the features, caption, init_state, and target
-        Returns
-        -------
-            dict
-                loss/accuracy metrics
+
+            Returns
+            -------
+                dict
+                    loss/accuracy metrics
         """
 
         target = data[1]
@@ -441,41 +422,44 @@ class NIC(tf.keras.Model):
 
         # Call model on sample
         prediction, attention_scores = self(
-                (
-                    data[0]
-                ),
-                training=False
+            (
+                data[0]
+            ),
+            training=False
         )
 
         # Attention loss
-        attn_across_time = tf.reduce_sum(tf.squeeze(attention_scores,axis=-1), axis=1)
-        attention_target = tf.ones(attn_across_time.shape, dtype=tf.float32)
+        attn_across_time = tf.reduce_sum(tf.squeeze(attention_scores,axis=-1),axis=1)
+        attention_target = tf.ones(attn_across_time.shape,dtype=tf.float32)
         attn_loss = self.MSE(attention_target, attn_across_time)
 
         # Cross-entropy & Accuracy
         for i in range(0, target.shape[1]):
-            cross_entropy_loss += self.loss_function(target[:,i], prediction[:,i])
-            accuracy += self.accuracy_calculation(target[:,i], prediction[:,i])
+            cross_entropy_loss += self.loss_function(target[:,i],prediction[:,i])
+            accuracy += self.accuracy_calculation(target[:,i],prediction[:,i])
 
         # Normalise across sentence length
         cross_entropy_loss /= int(target.shape[1])
         accuracy /= int(target.shape[1])
 
-        # Regularization losses
+        # Regularization
+        # losses
         l2_loss = tf.add_n(self.losses)
 
-        return {"loss": cross_entropy_loss, "L2": l2_loss, 'accuracy': accuracy, 'attention': attn_loss}
+        return {"loss": cross_entropy_loss, "L2":l2_loss, 'accuracy':accuracy,'attention':attn_loss}
 
     @tf.function
-    def loss_function(self, real, pred):
-        """ Call the compiled loss function """
-        real = tf.convert_to_tensor(real)
-        loss_ = self.compiled_loss(real, pred)
+    def loss_function(self,real,pred):
+        """ Call the compiled loss function
+        """
+        real=tf.convert_to_tensor(real)
+        loss_=self.compiled_loss(real,pred)
         return tf.reduce_mean(loss_)
 
     @tf.function
-    def accuracy_calculation(self, real, pred):
-        """ Compute categorical accuracy
+    def accuracy_calculation(self,real,pred):
+        """
+        Compute categorical accuracy
         Parameters
         ----------
             real : ndarray - one-hot
@@ -487,28 +471,16 @@ class NIC(tf.keras.Model):
             count : float
                 accuracy value across batches
         """
-        real_arg_max = tf.math.argmax(real, axis = 1)
-        pred_arg_max = tf.math.argmax(pred, axis = 1)
-        count = tf.reduce_sum(tf.cast(real_arg_max == pred_arg_max, tf.float32))
+        real_arg_max = tf.math.argmax(real,axis=1)
+        pred_arg_max=tf.math.argmax(pred,axis=1)
+        count=tf.reduce_sum(tf.cast(real_arg_max==pred_arg_max,tf.float32))
         return count / real_arg_max.shape[0]
 
-    def cosine_similarity(self, x, y):
-        """ Cosine similarity between two vectors
-        1.0 if x==y
-        """
-        num = sum([i * j for (i,j) in zip(x, y)])
-        den_x = np.sqrt(sum(np.power(x,2)))
-        den_y = np.sqrt(sum(np.power(y,2)))
-        return num / (den_x * den_y)
-
-    def cosine_loss(self, x, y):
-        """ Return the cosine similarity as a loss value
-        The value ranges between 1 and 0, and is 0 if x == y
-        """
-        return 1 - self.cosine_similarity(x, y)
 
     # ---===================---
-    # ---=== Predictions ===---
+    # ---===
+    # Predictions
+    # ===---
     # ---===================---
     def greedy_predict(self, *args, **kwargs):
         return self.greedy_predict_attention(*args, **kwargs)
@@ -618,7 +590,6 @@ class NIC(tf.keras.Model):
 
             sample = tf.concat([context, text], axis=-1)
             _, a, c = self.lstm(sample, initial_state=[a,c], training=training)
-            #seq = self.expand(a)
             seq = tf.expand_dims(a, axis=1)
             seq = self.dropout_lstm(seq, training=training)
 
@@ -638,81 +609,9 @@ class NIC(tf.keras.Model):
 
         # outputs -> np.array == (max_len, bs, 1)
         outputs = np.stack(outputs, axis=1)
-        outputs_raw = np.concatenate(outputs_raw, axis=1)
+        #outputs_raw = np.concatenate(outputs_raw, axis=1)
         assert outputs.shape == (features.shape[0], max_len, 1)
-        return outputs, outputs_raw, np.array(attention_scores)#, np.array(attention_weights)
-
-    def beam_search(self, features, start_seq, max_len, units):
-
-        features = self.dense_in(features, training=False)
-        print("features:", features.shape)
-
-        text = self.embedding(start_seq)
-        text = tf.squeeze(text, axis=1)
-        #text = self.expand(text)
-        print("text:", text.shape)
-
-        a = tf.zeros((features.shape[0], units))
-        c = tf.zeros((features.shape[0], units))
-
-        context, attention_score = self.attention(a, features, training=False)
-        sample = tf.concat([context, text], axis=-1)
-        seq, a, c = self.lstm(sample, initial_state=[a,c], training=False)
-        output = self.dense_inter(seq, training=False)
-        output = self.dense_out(output, training=False) # (bs, 1, 5001)
-        #word = np.argmax(output, axis=-1)
-        words, _ = self.select_nucleus2(output, p=0.5)
-
-        frontier = []
-        for w in words:
-            frontier.append((seq, [w]))
-
-        sequences = self._beam_search(frontier)
-        print("-- Beam search complete --")
-
-
-    def _beam_search(self, frontier: list, max_len: int, features: np.array):
-
-        if frontier[0][0].shape[1] == max_len:
-            return frontier
-        else:
-            new_frontier = []
-            for i, seq in enumerate(frontier):
-                output = self.dense_inter(seq, training=False)
-                output = self.dense_out(output, training=False) # (bs, 1, 5001)
-                #word = np.argmax(output, axis=-1)
-                words, _ = self.select_nucleus2(output, p=0.5)
-
-                for j, word in enumerate(words):
-                    text = self.embedding(word)
-                    context, _ = self.attention(seq[:,-1,:], features, training=False)
-                    sample = tf.concat([context, text], axis=-1)
-
-                    a = tf.zeros((features.shape[0], units))
-                    c = tf.zeros((features.shape[0], units))
-                    seq, a, c = self.lstm(seq, initial_state=[a,c], training=False)
-                    seq, _, _ = self.lstm(context, initial_state=[a,c], training=False)
-                    new_frontier.append((seq, frontier[i][1] + [word]))
-
-            self._beam_search(new_frontier, max_len, features)
-
-    def select_nucleus2(probability_vector, p: float = 0.5) -> (list, int):
-        """
-        Sample from probability_vector untill
-        total probability of those samples is greater than p
-        """
-        samples = []
-        samples.append( tf.random.categorical(probability_vector, 1) )
-
-        sum_prob = 0
-        for i in samples:
-            sum_prob += probability_vector[i]
-
-        while sum_prob < p:
-            samples.append( tf.random.categorical(probability_vector, 1) )
-            sum_prob += probability_vector[samples[-1]]
-
-        return samples, sum_prob
+        return outputs, outputs_raw, np.array(attention_scores)
 
 
     @tf.function()

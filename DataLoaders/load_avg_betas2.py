@@ -127,6 +127,15 @@ def timeit(func):
         return out
     return wrapper
 
+class Timer(object):
+    def __init__(self, name):
+        self.name = name
+    def __enter__(self):
+        self.start = time.time()
+        return self
+    def __exit__(self, type, value, traceback):
+        print(f"{self.name} :: {(time.time() - self.start):.1f}s")
+
 
 def remove_stop_words(list_of_words: list):
     stop_words = []
@@ -271,6 +280,7 @@ def create_pairs(keys: list, subj='2', single=False):
             [NSD key, caption, idx(between 0 and 10k), subject id]
     """
 
+    # Loads a dictionary:  {NSD_key -> list(captions)}
     all_captions_dict = load_all_captions()
 
     pairs = []
@@ -308,13 +318,13 @@ def batchify(pairs: list, batch_size: int = 64):
 def load_split_betas(subj = '2'):
     """ Load the single betas .npy file and return 3 separate ndarrays for train/val/test
     """
-    s = time.time()
+    print(f">> Loading and splitting betas for subject: {subj}")
     df = pd.read_csv(f'{thesis_dir}/TrainData/subj0{subj}_conditions2.csv')
     unq = df['nsd_key'].values
     shrd = df['nsd_key'].loc[df['is_shared']==1].values
     test = df['nsd_key'].loc[df['is_test']==1].values
-    print(f"Load keys: {(time.time() - s):.3f}")
 
+    # Split the keys into train//val//test
     train_idx = []
     val_idx = []
     test_idx = []
@@ -326,18 +336,26 @@ def load_split_betas(subj = '2'):
         else:
             train_idx.append(i)
 
+    # List -> np.array
     train_idx = np.array(train_idx)
     val_idx   = np.array(val_idx)
     test_idx  = np.array(test_idx)
+    print("train_idx:", train_idx.shape)
+    print("val_idx:  ", val_idx.shape)
+    print("test_idx: ", test_idx.shape)
 
-    s = time.time()
-    betas = np.load(open(f"/home/hpcgies1/rds/hpc-work/NIC/Data/subj0{subj}/betas_averaged/all_betas.npy", "rb"))
-    print(f"Load betas: {(time.time() - s):.3f}")
-    s = time.time()
-    train_betas = betas[train_idx, :]
-    val_betas = betas[val_idx, :]
-    test_betas = betas[test_idx, :]
-    print(f"Split betas: {(time.time() - s):.3f}")
+    # Load betas file
+    with Timer('Load betas'):
+        betas = np.load(
+                open(f"/home/hpcgies1/rds/hpc-work/NIC/Data/subj0{subj}/betas_averaged/all_betas.npy", "rb"))
+    # Split betas array
+    with Timer('Split betas'):
+        train_betas = betas[train_idx, :]
+        if val_idx.shape[0] > 0:
+            val_betas = betas[val_idx, :]
+        else:
+            val_betas = np.zeros((1,1))
+        test_betas = betas[test_idx, :]
     return train_betas, val_betas, test_betas
 
 def load_subs(subs = [1,2,3,4,5,6,7,8]):
@@ -356,14 +374,13 @@ def load_subs(subs = [1,2,3,4,5,6,7,8]):
         val_pairs.append(val_pair)
         test_pairs.append(test_pair)
 
-        start_t = time.time()
         train_beta, val_beta, test_beta = load_split_betas(str(sub))
         train_betas[str(sub)] = train_beta
         val_betas[str(sub)] = val_beta
         test_betas[str(sub)] = test_beta
         print("sub:", sub)
         print("train, val, test:", train_beta.shape, "-", val_beta.shape, "-", test_beta.shape)
-        print(f"Load betas: {(time.time() - start_t):.3f}")
+        print()
 
     return train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas
 

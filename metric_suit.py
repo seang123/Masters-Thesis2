@@ -106,7 +106,7 @@ def run_metrics():
 
     # print output evaluation scores
     for metric, score in coco_eval.eval.items():
-            print(f'{metric}: {score:.3f}')
+        print(f'{metric}: {score:.3f}')
 
     return
 

@@ -42,7 +42,7 @@ if args.dir != None: model_name = args.dir
 if args.e != None: epoch = args.e
 if args.sub != None: subject = args.sub
 
-print(">> Subject: ", subject)
+print(">> Subject: ", subject, " <<")
 
 model_dir = f"./Log/{model_name}/model/model-ep{epoch:03}.h5"
 print("Model dir:   ", model_dir)
@@ -76,6 +76,7 @@ if args.bs != None: batch_size = args.bs
 ## ======= Load data =========
 
 train_keys, val_keys, test_keys = loader.get_nsd_keys(subject)
+print("train_keys:", train_keys[:10])
 print("train_keys:", train_keys.shape)
 print("val_keys:", val_keys.shape)
 print("test_keys:", test_keys.shape)
@@ -108,12 +109,6 @@ print("test betas:", len(test_betas))
 def remove_dup_pairs(pairs):
     """ Remove duplicates from the pairs list, based on NSD key """
     return list({v[0]:v for v in pairs}.values())
-#print("Removing duplicates from pairs list ... ")
-#train_pairs = remove_dup_pairs(train_pairs)
-#val_pairs   = remove_dup_pairs(val_pairs)
-#test_pairs  = remove_dup_pairs(test_pairs)
-#print(f"train_pairs: {len(train_pairs)}")
-#print(f"val_pairs  : {len(val_pairs)}")
 
 ## ======= Data Generator =========
 data_generator = generator.DataGenerator(
@@ -191,7 +186,7 @@ def eval_model():
     #attention_weights = np.swapaxes(np.concatenate((all_attention_weights), axis=1), 0, 1)
 
     print("outputs:", outputs.shape)
-    print("outputs_raw:", outputs_raw.shape)
+    #print("outputs_raw:", outputs_raw.shape)
     print("attention scores:", attention_scores.shape)
 
     add_name = f""
