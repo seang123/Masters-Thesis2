@@ -120,7 +120,7 @@ class NIC(tf.keras.Model):
         )
 
         # LSTM layer
-        use_layer_norm = False
+        use_layer_norm = True
         if not use_layer_norm:
             print("-- Using standard LSTM --")
             self.lstm = LSTM(units,

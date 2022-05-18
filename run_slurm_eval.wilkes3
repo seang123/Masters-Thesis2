@@ -62,7 +62,7 @@ source /home/hpcgies1/rds/hpc-work/tf24/bin/activate
 application="python -u /home/hpcgies1/Masters-Thesis/AttemptFour/eval.py"
 
 #! Run options for the application:
-options="--dir subject_7_baseline2 --e 80 --sub 7"
+options="--dir subject_1_baseline2 --e 93 --sub 1"
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory

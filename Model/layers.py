@@ -37,8 +37,8 @@ class LocallyDense(tf.keras.layers.Layer):
         self.input_groups = in_groups
 
         self.dropout = dropout
-        self.bn = tf.keras.layers.BatchNormalization(name = 'input_bn')
-        #self.bn = tf.keras.layers.LayerNormalization(axis=1)
+        #self.bn = tf.keras.layers.BatchNormalization(name = 'input_bn')
+        self.bn = tf.keras.layers.LayerNormalization(axis=1)
 
     def call(self, x, training=False):
         """ Forward pass """

@@ -1,16 +1,11 @@
 ---
  # Name the current run
- run: subject_5_baseline2
+ run: subject_1_layer_norm
 
  info: | 
      layer norm along axis 1 of the encoder (average region activity should be 0)
-     using proper split
-     using standard lstm
-     using only 485 validation samples, rest is test set
-     dropout
-     no attention loss
+     layer norm on LSTM
      constant learning rate of 0.0001
-     trained on subj 2 samples
      no adap grad clip
 
  # Data stores
@@ -20,12 +15,13 @@
      #captions_path: "/fast/seagie/data/subj_2/captions/"
      captions_path: "/home/hpcgies1/rds/hpc-work/NIC/Data/captions/"
      nsd_dir: "/home/hpcgies1/rds/hpc-work/NIC/NSD"
- log: "./Log/"
+ #log: "./Log/"
+ log: "/home/hpcgies1/rds/hpc-work/NIC/Log/"
 
  seed: 42
 
  # Training
- epochs: 100
+ epochs: 50
  batch_size: 64
  max_length: 15
  top_k: 5000 # vocab size
@@ -43,7 +39,7 @@
 
  input_reg: 0.01         # scientific notation requires decimal notation - x.0e
  attn_reg: 0.001
- lstm_reg: 0.00003
+ lstm_reg: 0.003 #0.00003
  output_reg: 0.00001 
 
  # Input size

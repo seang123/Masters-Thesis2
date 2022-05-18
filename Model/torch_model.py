@@ -13,7 +13,6 @@ class LocallyConnected(nn.Module):
         assert out_groups[0] == embedding_dim, f"Embedding shapes miss-aligned {out_groups[0]} != {embedding_dim}"
 
         self.norm = nn.LayerNorm(embedding_dim)
-        self.act  = nn.LeakyReLU(0.2)
 
         self.layers = nn.ModuleList()
         for i in range(len(in_groups)):
@@ -23,13 +22,15 @@ class LocallyConnected(nn.Module):
         """ Forward pass """
 
         # Loop through the layers, take the relevant indices from x as input
+        """
         output = []
         for i, l in enumerate(self.layers):
-            temp = self.in_groups[i]
-            x_i = x[:,self.in_groups[i]]
-            out = F.dropout(self.norm(self.act(l(x_i)))) # (bs, 32)
+            x_i = x[:,self.in_groups[i]] # Index the Glasser regions for current layer
+            out = F.dropout(self.norm(self.act(l(x_i)))) # out: (bs, 32)
             output.append( out )
+        """
 
+        output = [F.dropout(self.norm(F.leaky_relu( l( x[:,self.in_groups[i]] ), 0.2)), 0.1) for (i, l) in enumerate(self.layers)]
         return torch.stack(output, dim=1) # (bs, 360, 32)
 
 
@@ -124,7 +125,7 @@ class NIC(nn.Module):
         print("Model initalised")
 
 
-    def forward(self, x, subject):
+    def forward_old(self, x, subject):
         """
         Parameters:
         -----------
@@ -148,15 +149,14 @@ class NIC(nn.Module):
         output = []
         attention_scores = []
         for i in range(text.shape[1]):
-            #context = torch.mean(features, dim=1) # TODO attention
+            # Attention
             context, attention_weights = self.attention(a, features) # [bs, 32], [bs, 360, 1]
-
             context = torch.cat((context, text[:,i,:]), axis=1) # (bs, 1, 32 + 512)
             context = context.unsqueeze(1)
 
             # LSTM
             _, (a, c) = self.lstm(context, (a, c))
-            a = F.dropout(self.layer_norm(self.leaky_relu(a)))
+            a = F.dropout(self.layer_norm(self.leaky_relu(a)), 0.1)
 
             # Decoder
             out = self.decoder(a)
@@ -169,6 +169,44 @@ class NIC(nn.Module):
         attention_scores = torch.stack(attention_scores, 1)
         return output, attention_scores
 
+    def forward(self, features, word, hidden, carry, subject):
+        """ Forward method which takes a single word
+        Parameters:
+            features - betas
+                [bs, 327684]
+            word - integer encoded word
+                [bs]
+            hidden - lstm hidden state
+                [1, bs, units]
+            carry - lstm carry state
+                == hidden
+        """
+
+        # Select the right encoder
+        encoder  = self.encoders[subject]
+
+        # Encode features
+        features =  encoder(features) # (bs, 360, 32)
+
+        # Embed text
+        word = self.emb(word) # (bs, 1, 512)
+
+        context, attention_weights = self.attention(hidden, features) # out: [bs, 32], [bs, 360, 1]
+        context = torch.cat((context, word), axis=1) # (bs, 1, 32 + 512)
+        context = context.unsqueeze(1)
+
+        # LSTM
+        _, (hidden, carry) = self.lstm(context, (hidden, carry))
+        #a = F.dropout(self.layer_norm(self.leaky_relu(a)), 0.1)
+        hidden = self.layer_norm(hidden)
+        seq = F.dropout(self.leaky_relu(hidden), 0.1)
+
+        # Decoder
+        out = self.decoder(seq)
+
+        return out, attention_weights, hidden, carry
+
+
     def cross_entropy(self, pred, target):
         """ Compute cross entropy between two distributions """
         return torch.mean(-torch.sum(target * torch.log(pred), dim=1))# (bs, 5001) -> (64) -> (1)
@@ -180,8 +218,55 @@ class NIC(nn.Module):
         count = torch.sum(pred_arg_max == target_arg_max, dim=0)
         return count / target_arg_max.shape[0]
 
-
     def train_step(self, data, target, subject):
+        """ Train step
+        Passes one word at a time to the forward() method
+        Parameters:
+        -----------
+            data - tuple
+                (features, caption, hidden, carry)
+            target - tensor
+                (bs, max_len, vocab_size)
+            subject - int
+                subject id [0, 8)
+        Returns:
+        --------
+            output - tensor
+            attention maps - tensor
+            loss - dict
+        """
+
+        features, text, hidden, carry = data
+        hidden = hidden.unsqueeze(0)
+        carry  = carry.unsqueeze(0)
+
+
+        max_len = target.shape[1]
+        loss = 0
+        acc  = 0
+
+        output = []
+        attention_scores = []
+        for i in range(max_len):
+            word = text[:,i]
+            out, attn_score, hidden, carry = self(features, word, hidden, carry, subject)
+
+            loss += self.cross_entropy(out[0], target[:,i,:])
+            acc  += self.accuracy(out[0], target[:,i,:]).float()
+
+            attention_scores.append(attn_score)
+            output.append(out)
+
+        loss /= max_len
+        acc  /= max_len
+
+        output = torch.stack(output, dim=0) # (15, 1, bs, 5001)
+        output = torch.swapaxes(output[:,0,:,:], 0, 1) # (bs, 15, 5001)
+        attention_scores = torch.stack(attention_scores, 1)
+        return output, attention_scores, {'loss':loss, 'accuracy':acc}
+
+
+    def train_step_old(self, data, target, subject):
         """ Single training step for NIC model
 
         data - tuple

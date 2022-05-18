@@ -1,3 +1,14 @@
+
+
+## To get gpu-utilisation of a job
+
+$ myjobs 
+    to get job-id
+$ squeue -j job-id 
+    to get node (x-x-x)
+$ ssh x-x-x
+$ nvidia-smi
+
 ## Download data from aws with this command
 
 aws s3 sync s3://natural-scenes-dataset/nsddata ./nsddata_s1 --exclude "*subj0*" --include "*subj01*" --exclude "*func1mm*" --exclude "*func1pt8mm*" --exclude "*MNI*" --exclude "*nativesurface*" --exclude "*betas_assumehrf*" --exclude "*betas_fithrf/*" --exclude "*restingbetas_fithrf*"

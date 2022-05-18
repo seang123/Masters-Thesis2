@@ -33,7 +33,7 @@ torch.cuda.manual_seed(config['seed'])
 #torch.backends.cudnn.benchmarks = True # Optimize graphs - requires that input/output don't change in size
 
 run_name = config['run']
-run_path = os.path.join(config['log'], run_name)
+run_path = os.path.join(config['dataset']['log'], run_name)
 print("Run path:", run_path)
 
 if not os.path.exists(run_path):
@@ -58,7 +58,7 @@ vocab_size = config['top_k'] + 1
 groups = loader.get_groups(config['group_size'], separate_hemi=True)
 max_len = config['max_length']
 epochs = config['epochs']
-batch_size = 64
+batch_size = config['batch_size']
 print("--==Parameters==--")
 print("epochs:", epochs)
 print("batch size:", batch_size)
@@ -92,24 +92,25 @@ def testing():
 
 print("------ Data ------")
 
-train_pairs, val_pairs, test_pairs, train_betas, val_betas, _ = loader.load_subs([1,2,3,4,5,6,7,8]) # (subs 4 and 8 val set is == test set)
-
-#train_pairs, train_betas = testing()
+#train_pairs, val_pairs, test_pairs, train_betas, val_betas, _ = loader.load_subs([1,2,3,4,5,6,7,8]) # (subs 4 and 8 val set is == test set)
+train_pairs, train_betas = testing()
 
 n_subjects = len(train_pairs)
-print("N subjects:", n_subjects)
+print(">> N subjects:", n_subjects, "<<")
 
 ## Create the data generators for each subject
 train_generators = {}
 for i in range(n_subjects):
     train_dataset = Dataset(train_pairs[i], train_betas[str(i+1)], tokenizer, config['units'], config['max_length'], vocab_size, device)
-    train_generators[str(i+1)] = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    train_generators[str(i+1)] = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
 
-val_dataset = Dataset(val_pairs[1], train_betas['2'], tokenizer, config['units'], config['max_length'], vocab_size, device)
-val_generator = torch.utils.data.DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=0)
-
-
-
+"""
+val_generators = {}
+val_subjects = ['2', '7']
+for i in val_subjects:
+    val_dataset = Dataset(val_pairs[int(i)-1], train_betas[i], tokenizer, config['units'], config['max_length'], vocab_size, device)
+    val_generators[i] = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+"""
 
 
 #
@@ -136,9 +137,11 @@ def accuracy(pred, target):
 
 def train(model, optimizer, criterion):
 
-    losses = defaultdict(list)
+    #losses = defaultdict(list)
     for epoch in range(1,epochs+1):
         print(f" ---== Epoch :: {epoch} ==---")
+
+        losses = []
         epoch_time = time.time()
         for sub in range(n_subjects):
 
@@ -162,6 +165,9 @@ def train(model, optimizer, criterion):
                 # Model pass
                 output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=sub) # (bs, max_len, vocab_size)
 
+                # Model forward pass time
+                model_time = batch_time - prepare_time - time.time()
+
                 # Backprop
                 loss = loss_dict['loss']
                 loss.backward()
@@ -171,42 +177,85 @@ def train(model, optimizer, criterion):
                 loss_ = loss_dict['loss'].detach().item()
                 acc_  = loss_dict['accuracy'].detach().item()
                 sub_loss['sub_epoch_loss'].append(loss_)
+                sub_loss['sub_epoch_acc'].append(acc_)
+                losses.append( {'epoch':epoch, 'sub': sub+1, 'batch': batch_nr, 'loss':loss_, 'accuracy':acc_} )
 
                 process_time = batch_time - time.time() - prepare_time
                 # Print information
                 if batch_nr % 25 == 0:
-                    print(f"epoch: {epoch:02}/{epochs} | sub: {sub} | {batch_nr:03} | loss: {np.mean(sub_loss['sub_epoch_loss']):.3f} | acc: {acc_:.3f} | comp. eff.: {(process_time/(process_time+prepare_time)):.3f}")
+                    print(f"epoch: {epoch:02}/{epochs} | sub: {sub} | {batch_nr:03} | loss: {np.mean(sub_loss['sub_epoch_loss']):.3f} | acc: {np.mean(sub_loss['sub_epoch_acc']):.3f} | comp. eff.: {(model_time/(model_time+prepare_time)):.3f}")
 
             # Store loss
-            losses[f'sub_{sub}_loss'].append( np.mean(sub_loss['sub_epoch_loss']) )
             print(f"--- sub: {sub} // time: {(time.time()-sub_start_time):.2f}s // loss: {np.mean(sub_loss['sub_epoch_loss']):.3f} ---")
 
+        # ----------
         # Validation
+        # ----------
         model.eval()
         with torch.no_grad():
-            val_loss = defaultdict(list)
-            for batch_nr, data in enumerate(val_generator):
-                # Data prep
-                features, captions, hidden, carry, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device)
-                # Model pass
-                output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=1) # (bs, max_len, vocab_size)
-                loss_ = loss_dict['loss'].detach().item()
-                acc_  = loss_dict['accuracy'].detach().item()
-                val_loss['loss'].append(loss_)
-                val_loss['accuracy'].append(acc_)
-            # Store validation loss
-            losses['val_loss'].append(val_loss['loss'])
-            losses['val_accuracy'].append(val_loss['accuracy'])
 
-        ## Post epoch
-        print(f"validation: {epoch:02}/{epochs} | loss: {np.mean(val_loss['loss']):.3f} | accuracy: {np.mean(val_loss['accuracy']):.3f}")
-        print(f"epoch: {epoch:02}/{epochs} complete! ({(time.time()-epoch_time):.1f}s)\n")
+            for v_sub in val_subjects:
+                val_loss = defaultdict(list)
+                val_generator = val_generators[v_sub]
+
+                for batch_nr, data in enumerate(val_generator):
+
+                    # Data prep
+                    features, captions, hidden, carry, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device)
+
+                    # Model pass
+                    output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=int(v_sub)-1) # (bs, max_len, vocab_size)
+
+                    # Losses
+                    loss_ = loss_dict['loss'].detach().item()
+                    acc_  = loss_dict['accuracy'].detach().item()
+                    val_loss['loss'].append( loss_ )
+                    val_loss['accuracy'].append( acc_ )
+                    losses.append( {'epoch':epoch, 'sub': v_sub, 'batch': batch_nr, 'val_loss': loss_, 'val_accuracy':acc_} )
+
+                print(f"validation: {epoch:02}/{epochs} | sub: {v_sub} | loss: {np.mean(val_loss['loss']):.3f} | accuracy: {np.mean(val_loss['accuracy']):.3f}")
+
+        ## ----- Post epoch -----
+
         # Store Loss
-        pd.DataFrame(losses).to_csv(f"{run_path}/torch_loss.csv")
+        pd.DataFrame(losses).to_csv(f"{run_path}/loss_history.csv", mode='a', header=not os.path.exists(f"{run_path}/loss_history.csv"))
         # Save model
         torch.save({'epoch':epoch, 'model_state_dict':model.state_dict(), 'optimizer_state_dict':optimizer.state_dict()}, f'{run_path}/model/model_ep{epoch:03}.pt')
 
-    # Post training
+        print(f"epoch: {epoch:02}/{epochs} complete! ({(time.time()-epoch_time):.1f}s)\n")
+
+
+    # ---- Post training ----
+
+
+
+def generate_predictions(model, generators: dict):
+    """ Generate predictions
+
+    Parameters:
+    -----------
+        model - pytorch-model
+        generators - dict
+            dictionary of pytorch generators
+
+    Return:
+    -------
+        output : np.array
+            (n_subjects, 515, max_len, 1) integer encoded output captions
+        attention maps : np.array
+            (n_subject, 515, max_len, 360, 1) attention maps
+    """
+
+
+    for sub in range(n_subjects):
+        generator = generators[str(sub+1)]
+        print("Inference // subject: {sub+1}")
+        for batch_nr, data in enumerate(generator):
+            features, captions, hidden, carry, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4]
+
+            # Generate caption
+            output, attention_maps = model.predict((features, start_seq, hidden, carry), subject=sub) # out:
+
 
 
 if __name__ == '__main__':

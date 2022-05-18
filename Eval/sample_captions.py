@@ -56,7 +56,7 @@ def large_lstm():
     data = np.squeeze(data, axis=-1)
 
     targets = load_captions_dict()
-    
+
     all_bleu_scores(data, targets)
 
     np.random.seed(8)
@@ -123,18 +123,18 @@ def load_captions_dict():
                 captions[key].append(cap)
 
     return captions
-                
+
 
 
 def bleu_score_sort(data_max: np.array, targets: defaultdict):
-    """ Sort candidate captions by bleu score 
-    
+    """ Sort candidate captions by bleu score
+
     Parameter
     ---------
         data_max : np.array  (1000, 15)
             argmax'd model output
         targets : dict of lists
-            holds (nsd_key, [target caps]) 
+            holds (nsd_key, [target caps])
 
     Return
     ------
@@ -147,15 +147,15 @@ def bleu_score_sort(data_max: np.array, targets: defaultdict):
     scores = {}
 
     cand_captions = untokenize(data_max)
-    
+
     for i, key in enumerate(val_keys_list):
         references = [i.split(" ") for i in targets[key]]
-        hypothesis = cand_captions[i] 
+        hypothesis = cand_captions[i]
         hypothesis = remove_pad(hypothesis).split(" ")
 
         b_score = sentence_bleu(references, hypothesis, weights=(1/4, 1/4, 1/4, 1/4), smoothing_function=chencherry.method2)
         scores[(i,key)] = b_score
-    
+
     # Sort by val (bleu score)
     scores = {k: v for k, v in sorted(scores.items(), key=lambda item: item[1])}
 
@@ -176,17 +176,17 @@ def all_bleu_scores(data_max: np.array, targets: defaultdict):
         (1./1., 0., 0., 0.),
         (1./2., 1./2., 0., 0.),
         (1./3., 1./3., 1./3., 0.),
-        (1./4., 1./4., 1./4., 1./4.)     
+        (1./4., 1./4., 1./4., 1./4.)
     ]
 
     cand_captions = tokenizer.sequences_to_texts(data_max)
 
     s = time.time()
-    references = [] 
+    references = []
     hypothesis = []
     for i, key in enumerate(val_keys_list):
         ref = [i.split(" ") for i in targets[key]]
-        hyp = cand_captions[i] 
+        hyp = cand_captions[i]
         hyp = remove_pad(hyp).split(" ")
         references.append(ref)
         hypothesis.append(hyp)
@@ -258,7 +258,7 @@ def sample_captions(data_max: np.array, fname= 'cap_img_pairs'):
     indices = np.random.randint(0, 515, (n_rows, n_cols))
 
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(20,9))
-    
+
     for r in range(n_rows):
         for c in range(n_cols):
             idx = indices[r,c]
@@ -271,7 +271,7 @@ def sample_captions(data_max: np.array, fname= 'cap_img_pairs'):
 
     plt.savefig(f"./Eval/caption_samples/{fname}.png", bbox_inches='tight')
     plt.close(fig)
-    
+
 def plot_bleu(bleu):
 
     fig, ax = plt.subplots(1,1)
@@ -314,9 +314,9 @@ def perplexity(data):
     for i in range(len(probs)):
         entropy += probs[i] * log_probs[i]
     print("entropy:", entropy)
-    
 
-    
+
+
 
 def load_captions(keys):
     captions_path = "/fast/seagie/data/captions/"
@@ -351,8 +351,8 @@ def train_set_perplexity(data):
     shrd = df['nsd_key'].loc[df['is_shared']==1]
     train_keys, val_keys = unq.values, shrd.values
     all_keys = np.concatenate((train_keys, val_keys))
-    
-    # Load a [list] of all captions 
+
+    # Load a [list] of all captions
     captions = load_captions(all_keys)
     captions = [i.split(" ") for i in captions]
     captions = [item for sublist in captions for item in sublist]
@@ -438,7 +438,7 @@ if __name__ == '__main__':
 
     #train_set_perplexity(data_s2)
     #perplexity(data_s2_max)
-    
+
     # Plot some img-cap samples
     #sample_captions(data_s2_max)
 
