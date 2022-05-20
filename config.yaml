@@ -1,6 +1,6 @@
 ---
  # Name the current run
- run: subject_1_layer_norm
+ run: subject_7_layer_norm
 
  info: | 
      layer norm along axis 1 of the encoder (average region activity should be 0)
@@ -21,7 +21,7 @@
  seed: 42
 
  # Training
- epochs: 50
+ epochs: 40
  batch_size: 64
  max_length: 15
  top_k: 5000 # vocab size

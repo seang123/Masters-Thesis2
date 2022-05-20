@@ -53,7 +53,7 @@ print(f"Model file copied to {run_path} for record", flush=True)
 ## Parameters
 vocab_size = config['top_k'] + 1
 
-subject = '5'
+subject = '7'
 print(">> subject: ", subject, " <<")
 #
 ## Load data
@@ -196,6 +196,7 @@ def dotfit():
             pre_load_betas=False,
             shuffle=False, training=True)
 
+    train_start = time.time()
     model.fit(
             train_generator,
             epochs = config['epochs'],
@@ -205,6 +206,8 @@ def dotfit():
             validation_data = val_generator,
             validation_steps = len(val_pairs)//config['batch_size'],
             initial_epoch = start_epoch)
+    print(f"Training completed in {(time.time()-train_start):.1f}sec.")
+
     return
 
 

@@ -22,7 +22,7 @@
 #! Note that the job submission script will enforce no more than 32 cpus per GPU.
 #SBATCH --gres=gpu:1
 #! How much wallclock time will be required?
-#SBATCH --time=12:00:00
+#SBATCH --time=00:30:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-user=seanpgies@gmail.com
 #SBATCH --mail-type=FAIL
@@ -62,7 +62,7 @@ source /home/hpcgies1/rds/hpc-work/tf24/bin/activate
 application="python -u /home/hpcgies1/Masters-Thesis/AttemptFour/torch_main.py"
 
 #! Run options for the application:
-#options="--dir subject_2_layer_norm --e 20"
+options="--train 0"
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory

@@ -1,8 +1,10 @@
 ---
  # Name the current run
- run: multi_subject_torch2
+ run: multi_subject_torch3
 
  info: | 
+     fixed a potentially bug in the LSTM -
+     which before was applying recursive dropout and relu activation to the hidden layer
      changes to how loss is saved 
      pytorch model
      8 subjects
@@ -17,7 +19,7 @@
      nsd_dir: "/home/hpcgies1/rds/hpc-work/NIC/NSD"
      log: "/home/hpcgies1/rds/hpc-work/NIC/Log/"
 
- seed: 422
+ seed: 42
 
  # Training
  epochs: 25

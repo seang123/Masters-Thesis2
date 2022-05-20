@@ -30,7 +30,7 @@ class LocallyConnected(nn.Module):
             output.append( out )
         """
 
-        output = [F.dropout(self.norm(F.leaky_relu( l( x[:,self.in_groups[i]] ), 0.2)), 0.1) for (i, l) in enumerate(self.layers)]
+        output = [F.dropout(F.leaky_relu(self.norm( l( x[:,self.in_groups[i]] ) ), 0.2), 0.1) for (i, l) in enumerate(self.layers)]
         return torch.stack(output, dim=1) # (bs, 360, 32)
 
 
@@ -61,6 +61,9 @@ class Attention(nn.Module):
         """
 
         hidden_with_time_axis = torch.swapaxes(hidden, 0, 1) # out: [bs, 1, 512]
+        print("--Attention--")
+        print("features:", features.shape)
+        print("hidden_with_time_axis:", hidden_with_time_axis.shape)
 
         attention_hidden_layer = torch.tanh(
                 F.relu(self.W1(features)) + F.relu(self.W2(hidden_with_time_axis))) # out: [bs, 360, 32]
@@ -118,14 +121,10 @@ class NIC(nn.Module):
 
         # Layer norm for LSTM
         self.layer_norm = nn.LayerNorm([units])
-
-        # Activation func
-        self.leaky_relu = nn.LeakyReLU(0.2)
-
         print("Model initalised")
 
 
-    def forward_old(self, x, subject):
+    def forward(self, x, subject):
         """
         Parameters:
         -----------
@@ -156,10 +155,12 @@ class NIC(nn.Module):
 
             # LSTM
             _, (a, c) = self.lstm(context, (a, c))
-            a = F.dropout(self.layer_norm(self.leaky_relu(a)), 0.1)
+            #a = F.dropout(F.leaky_relu( self.layer_norm(a), 0.2), 0.1)
+            a = self.layer_norm(a)
+            seq = F.dropout(F.leaky_relu(a, 0.2), 0.1)
 
             # Decoder
-            out = self.decoder(a)
+            out = self.decoder(seq)
 
             output.append( out )
             attention_scores.append( attention_weights )
@@ -169,11 +170,11 @@ class NIC(nn.Module):
         attention_scores = torch.stack(attention_scores, 1)
         return output, attention_scores
 
-    def forward(self, features, word, hidden, carry, subject):
+    def predict(self, features, word, hidden, carry, subject):
         """ Forward method which takes a single word
         Parameters:
             features - betas
-                [bs, 327684]
+                [bs, 360, 32]
             word - integer encoded word
                 [bs]
             hidden - lstm hidden state
@@ -184,12 +185,16 @@ class NIC(nn.Module):
 
         # Select the right encoder
         encoder  = self.encoders[subject]
-
         # Encode features
         features =  encoder(features) # (bs, 360, 32)
+        print("--predict--")
+        print("features:", features.shape)
 
         # Embed text
         word = self.emb(word) # (bs, 1, 512)
+        word = torch.unsqeeuze(0)
+        print("word:", word.shape)
+        print("hidden:", hidden.shape)
 
         context, attention_weights = self.attention(hidden, features) # out: [bs, 32], [bs, 360, 1]
         context = torch.cat((context, word), axis=1) # (bs, 1, 32 + 512)
@@ -197,9 +202,8 @@ class NIC(nn.Module):
 
         # LSTM
         _, (hidden, carry) = self.lstm(context, (hidden, carry))
-        #a = F.dropout(self.layer_norm(self.leaky_relu(a)), 0.1)
         hidden = self.layer_norm(hidden)
-        seq = F.dropout(self.leaky_relu(hidden), 0.1)
+        seq = F.dropout(F.leaky_relu(hidden, 0.2), 0.1)
 
         # Decoder
         out = self.decoder(seq)
@@ -218,8 +222,9 @@ class NIC(nn.Module):
         count = torch.sum(pred_arg_max == target_arg_max, dim=0)
         return count / target_arg_max.shape[0]
 
-    def train_step(self, data, target, subject):
-        """ Train step
+    def inference_step(self, data, target, subject):
+        # TODO: was implemented as a train-step, needs to be re-writetn for inference
+        """ Inference step
         Passes one word at a time to the forward() method
         Parameters:
         -----------
@@ -240,6 +245,10 @@ class NIC(nn.Module):
         hidden = hidden.unsqueeze(0)
         carry  = carry.unsqueeze(0)
 
+        # Select the right encoder
+        encoder  = self.encoders[subject]
+        # Encode features
+        features = encoder(features) # (bs, 360, 32)
 
         max_len = target.shape[1]
         loss = 0
@@ -266,7 +275,7 @@ class NIC(nn.Module):
         return output, attention_scores, {'loss':loss, 'accuracy':acc}
 
 
-    def train_step_old(self, data, target, subject):
+    def train_step(self, data, target, subject):
         """ Single training step for NIC model
 
         data - tuple
