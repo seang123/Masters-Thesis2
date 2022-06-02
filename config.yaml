@@ -3,8 +3,7 @@
  run: subject_7_layer_norm
 
  info: | 
-     layer norm along axis 1 of the encoder (average region activity should be 0)
-     layer norm on LSTM
+     last axis encoder layer norm + ln-lstm
      constant learning rate of 0.0001
      no adap grad clip
 
@@ -20,8 +19,10 @@
 
  seed: 42
 
+ subject: '7'
+
  # Training
- epochs: 40
+ epochs: 50
  batch_size: 64
  max_length: 15
  top_k: 5000 # vocab size
@@ -37,9 +38,9 @@
  dropout_attn: 0.2 
  dropout_out: 0.2
 
- input_reg: 0.01         # scientific notation requires decimal notation - x.0e
- attn_reg: 0.001
- lstm_reg: 0.003 #0.00003
+ input_reg: 0.05 # 0.01         # scientific notation requires decimal notation - x.0e
+ attn_reg: 0.00001 # 0.001 - orig
+ lstm_reg: 0.003 # 0.00003 # 0.003-for layer norm
  output_reg: 0.00001 
 
  # Input size

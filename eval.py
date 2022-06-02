@@ -42,9 +42,14 @@ if args.dir != None: model_name = args.dir
 if args.e != None: epoch = args.e
 if args.sub != None: subject = args.sub
 
+print()
+print(">> Model:   ", model_name, " <<")
 print(">> Subject: ", subject, " <<")
+print(">> Epoch:   ", epoch, " <<")
+print()
 
-model_dir = f"./Log/{model_name}/model/model-ep{epoch:03}.h5"
+#model_dir = f"./Log/{model_name}/model/model-ep{epoch:03}.h5"
+model_dir = f"/home/hpcgies1/rds/hpc-work/NIC/Log/{model_name}/model/model-ep{epoch:03}.h5"
 print("Model dir:   ", model_dir)
 
 #print("sleep 5 sec")
@@ -52,14 +57,17 @@ print("Model dir:   ", model_dir)
 
 ## ======= Config =========
 
-with open(f"./Log/{model_name}/config.yaml", "r") as f:
+#with open(f"./Log/{model_name}/config.yaml", "r") as f:
+with open(f"/home/hpcgies1/rds/hpc-work/NIC/Log/{model_name}/config.yaml", "r") as f:
     config = yaml.safe_load(f)
     print(f"Config file loaded:\n\t {f.name}")
 
 run_name = config['run']
 #out_path = os.path.join(config['log'], run_name, 'eval_out')
 #out_path = './Eval/one_shot/'
-out_path = f'./Log/{run_name}/eval_out'
+#out_path = f'./Log/{run_name}/eval_out'
+out_path = f'/home/hpcgies1/rds/hpc-work/NIC/Log/{run_name}/eval_out'
+
 if not os.path.exists(out_path):
     os.makedirs(out_path)
     print(f"Creating evaluation output dir:\n\t{out_path}")

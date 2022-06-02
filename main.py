@@ -53,8 +53,9 @@ print(f"Model file copied to {run_path} for record", flush=True)
 ## Parameters
 vocab_size = config['top_k'] + 1
 
-subject = '7'
-print(">> subject: ", subject, " <<")
+#subject = '1'
+subject = config['subject']
+print("\n>> subject: ", subject, " <<\n")
 #
 ## Load data
 #
@@ -85,45 +86,45 @@ print(f"Using optimizer: Adam", flush=True)
 
 # Loss function
 loss_object = tf.keras.losses.CategoricalCrossentropy(
-        from_logits=False,
-        reduction='none'
+    from_logits=False,
+    reduction='none'
 )
 
 # Setup Model
 model = lc_NIC.NIC(
-        loader.get_groups(config['group_size'], separate_hemi=True),
-        #loader.select_groups(config['group_size'], remove=[142,17,133,315,1, 197,158,192,135,153,137,140,92,183,125]),
-        config['units'],
-        config['embedding_features'],
-        config['embedding_text'],
-        config['attn_units'],
-        vocab_size,
-        config['max_length'],
-        config['dropout_input'],
-        config['dropout_features'],
-        config['dropout_text'],
-        config['dropout_attn'],
-        config['dropout_lstm'],
-        config['dropout_out'],
-        config['input_reg'],
-        config['attn_reg'],
-        config['lstm_reg'],
-        config['output_reg']
-        )
+    loader.get_groups(config['group_size'], separate_hemi=True),
+    #loader.select_groups(config['group_size'], remove=[142,17,133,315,1, 197,158,192,135,153,137,140,92,183,125]),
+    config['units'],
+    config['embedding_features'],
+    config['embedding_text'],
+    config['attn_units'],
+    vocab_size,
+    config['max_length'],
+    config['dropout_input'],
+    config['dropout_features'],
+    config['dropout_text'],
+    config['dropout_attn'],
+    config['dropout_lstm'],
+    config['dropout_out'],
+    config['input_reg'],
+    config['attn_reg'],
+    config['lstm_reg'],
+    config['output_reg']
+)
 #Compile
 model.compile(optimizer, loss_object, run_eagerly=True)
 
 ## The following relates to pre-loading LSTM weights
 init_generator = generator.DataGenerator(
-        train_pairs,
-        train_betas,
-        config['batch_size'],
-        tokenizer,
-        config['units'],
-        config['max_length'],
-        vocab_size,
-        pre_load_betas=False,
-        shuffle=False, training=True)
+    train_pairs,
+    train_betas,
+    config['batch_size'],
+    tokenizer,
+    config['units'],
+    config['max_length'],
+    vocab_size,
+    pre_load_betas=False,
+    shuffle=False, training=True)
 build_time = time.perf_counter()
 temp = init_generator.__getitem__(0)[0]
 print(len(temp))
@@ -139,13 +140,13 @@ if not os.path.exists(checkpoint_path):
     os.makedirs(checkpoint_path)
 checkpoint_path_best = f"{checkpoint_path}" + "model-ep{epoch:03d}.h5"
 checkpoint_best = ModelCheckpoint(
-        checkpoint_path_best,
-        monitor='val_loss',
-        verbose=1,
-        save_weights_only=True,
-        save_best_only=True,
-        mode='min',
-        period=1
+    checkpoint_path_best,
+    monitor='val_loss',
+    verbose=1,
+    save_weights_only=True,
+    save_best_only=True,
+    mode='min',
+    period=1
 )
 
 #
@@ -155,62 +156,61 @@ loss_history = EpochLoss.LossHistory(f"{run_path}/loss_history.csv", f"{run_path
 
 logdir = f"./tb_logs/scalars/{config['run']}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 tensorboard_callback = TensorBoard(
-        log_dir=logdir,
-        update_freq='batch')
+    log_dir=logdir,
+    update_freq='batch')
 
 #lr_scheduler = tf.keras.callbacks.LearningRateScheduler(
 #        lr_schedule, verbose = 0)
 
 _callbacks = [
-        loss_history,
-        #tensorboard_callback,
-        checkpoint_best,
+    loss_history,
+    #tensorboard_callback,
+    checkpoint_best,
 ]
 callbacks = tf.keras.callbacks.CallbackList(
-            _callbacks, add_history=True, model=model)
+    _callbacks, add_history=True, model=model)
 
 logs = {}
 start_epoch = 0
+
 
 def dotfit():
     logging.info("training with .fit()")
 
     train_generator = generator.DataGenerator(
-            train_pairs,
-            train_betas,
-            config['batch_size'],
-            tokenizer,
-            config['units'],
-            config['max_length'],
-            vocab_size,
-            pre_load_betas=False,
-            shuffle=True, training=True)
+        train_pairs,
+        train_betas,
+        config['batch_size'],
+        tokenizer,
+        config['units'],
+        config['max_length'],
+        vocab_size,
+        pre_load_betas=False,
+        shuffle=True, training=True)
     val_generator = generator.DataGenerator(
-            val_pairs,
-            val_betas,
-            config['batch_size'],
-            tokenizer,
-            config['units'],
-            config['max_length'],
-            vocab_size,
-            pre_load_betas=False,
-            shuffle=False, training=True)
+        val_pairs,
+        val_betas,
+        config['batch_size'],
+        tokenizer,
+        config['units'],
+        config['max_length'],
+        vocab_size,
+        pre_load_betas=False,
+        shuffle=False, training=True)
 
     train_start = time.time()
     model.fit(
-            train_generator,
-            epochs = config['epochs'],
-            steps_per_epoch = len(train_pairs)//config['batch_size'],
-            batch_size = config['batch_size'],
-            callbacks = _callbacks,
-            validation_data = val_generator,
-            validation_steps = len(val_pairs)//config['batch_size'],
-            initial_epoch = start_epoch)
+        train_generator,
+        epochs = config['epochs'],
+        steps_per_epoch = len(train_pairs) // config['batch_size'],
+        batch_size = config['batch_size'],
+        callbacks = _callbacks,
+        validation_data = val_generator,
+        validation_steps = len(val_pairs) // config['batch_size'],
+        initial_epoch = start_epoch)
     print(f"Training completed in {(time.time()-train_start):.1f}sec.")
 
     return
-
-
 
 
 def custom_train_loop():
@@ -241,8 +241,8 @@ def custom_train_loop():
         #batch_val_loss = defaultdict(list)
 
         # Progress bar
-        pb = Progbar(len(train_pairs)/config['batch_size'])#, stateful_metrics=['loss', 'l2', 'accuracy'])
-        pb2 = Progbar(len(val_pairs)/config['batch_size'])#, stateful_metrics=['val-loss', 'val-l2', 'val-accuracy'])
+        pb = Progbar(len(train_pairs) / config['batch_size'])  #, stateful_metrics=['loss', 'l2', 'accuracy'])
+        pb2 = Progbar(len(val_pairs) / config['batch_size'])  #, stateful_metrics=['val-loss', 'val-l2', 'val-accuracy'])
 
         # Training
         for (batch_nr, data) in enumerate(train_generator):
@@ -291,7 +291,9 @@ def custom_train_loop():
 
     return
 
+
 if __name__ == '__main__':
+
     try:
         #custom_train_loop()
         dotfit()
@@ -299,4 +301,3 @@ if __name__ == '__main__':
         print("--Keyboard Interrupt--", flush=True)
     finally:
         print(f"Done.", flush=True)
-

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
 class LocallyConnected(nn.Module):
 
     def __init__(self, groups, embedding_dim):
@@ -20,18 +21,10 @@ class LocallyConnected(nn.Module):
 
     def forward(self, x):
         """ Forward pass """
-
         # Loop through the layers, take the relevant indices from x as input
-        """
-        output = []
-        for i, l in enumerate(self.layers):
-            x_i = x[:,self.in_groups[i]] # Index the Glasser regions for current layer
-            out = F.dropout(self.norm(self.act(l(x_i)))) # out: (bs, 32)
-            output.append( out )
-        """
-
-        output = [F.dropout(F.leaky_relu(self.norm( l( x[:,self.in_groups[i]] ) ), 0.2), 0.1) for (i, l) in enumerate(self.layers)]
-        return torch.stack(output, dim=1) # (bs, 360, 32)
+        output = [F.dropout(F.leaky_relu(self.norm(layer(
+            x[:, self.in_groups[i]])), 0.2), 0.2) for (i, layer) in enumerate(self.layers)]
+        return torch.stack(output, dim=1)  # (bs, 360, 32)
 
 
 
@@ -60,17 +53,14 @@ class Attention(nn.Module):
             features - input_shape: [bs, 360, embedding_dim]
         """
 
-        hidden_with_time_axis = torch.swapaxes(hidden, 0, 1) # out: [bs, 1, 512]
-        print("--Attention--")
-        print("features:", features.shape)
-        print("hidden_with_time_axis:", hidden_with_time_axis.shape)
+        hidden_with_time_axis = torch.swapaxes(hidden, 0, 1)  # out: [bs, 1, 512]
 
         attention_hidden_layer = torch.tanh(
-                F.relu(self.W1(features)) + F.relu(self.W2(hidden_with_time_axis))) # out: [bs, 360, 32]
+            F.relu(self.W1(features)) + F.relu(self.W2(hidden_with_time_axis)))  # out: [bs, 360, 32]
 
-        score = self.V(attention_hidden_layer) # out: [bs, 360, 1]
+        score = self.V(attention_hidden_layer)  # out: [bs, 360, 1]
         attention_weights = self.softmax(score)
-        context_vector = torch.sum(attention_weights * features, dim=1) # out: [bs, 1, 32]
+        context_vector = torch.sum(attention_weights * features, dim=1)  # out: [bs, 1, 32]
         return context_vector, attention_weights
 
 
@@ -79,7 +69,7 @@ class Attention(nn.Module):
 
 class NIC(nn.Module):
 
-    def __init__(self, groups, embedding_dim_feat, embedding_dim_text, units, max_len, vocab_size, n_subjects=8 ):
+    def __init__(self, groups, embedding_dim_feat, embedding_dim_text, units, max_len, vocab_size, n_subjects=8):
         """
         Parameters:
         -----------
@@ -105,19 +95,19 @@ class NIC(nn.Module):
         # Embedding layer
         self.emb = nn.Embedding(vocab_size, embedding_dim_text)
         # LSTM
-        self.lstm= nn.LSTM(
-                input_size=embedding_dim_feat + embedding_dim_text,
-                hidden_size=units,
-                num_layers=1,#max_len,
-                batch_first=True)
+        self.lstm = nn.LSTM(
+            input_size=embedding_dim_feat + embedding_dim_text,
+            hidden_size=units,
+            num_layers=1,  #max_len,
+            batch_first=True)
         # Decoder
         self.decoder = nn.Sequential(
-                nn.Linear(512, 256),
-                nn.LeakyReLU(0.2),
-                nn.Dropout(0.1),
-                nn.Linear(256, vocab_size),
-                nn.Softmax(dim=-1)
-                )
+            nn.Dropout(0.2),
+            nn.Linear(units, 256),
+            nn.LeakyReLU(0.2),
+            nn.Dropout(0.2),
+            nn.Linear(256, vocab_size),
+            nn.Softmax(dim=-1))
 
         # Layer norm for LSTM
         self.layer_norm = nn.LayerNorm([units])
@@ -140,7 +130,7 @@ class NIC(nn.Module):
         encoder  = self.encoders[subject]
 
         # Encode features
-        features =  encoder(features) # (bs, 360, 32)
+        features = encoder(features)  # (bs, 360, 32)
 
         # Embed text
         text = self.emb(text)
@@ -149,29 +139,28 @@ class NIC(nn.Module):
         attention_scores = []
         for i in range(text.shape[1]):
             # Attention
-            context, attention_weights = self.attention(a, features) # [bs, 32], [bs, 360, 1]
-            context = torch.cat((context, text[:,i,:]), axis=1) # (bs, 1, 32 + 512)
+            context, attention_weights = self.attention(a, features)  # [bs, 32], [bs, 360, 1]
+            context = torch.cat((context, text[:, i, :]), axis=1)  # (bs, 1, 32 + 512)
             context = context.unsqueeze(1)
 
             # LSTM
             _, (a, c) = self.lstm(context, (a, c))
-            #a = F.dropout(F.leaky_relu( self.layer_norm(a), 0.2), 0.1)
             a = self.layer_norm(a)
-            seq = F.dropout(F.leaky_relu(a, 0.2), 0.1)
+            seq = F.leaky_relu(a, 0.2)
 
             # Decoder
             out = self.decoder(seq)
 
-            output.append( out )
-            attention_scores.append( attention_weights )
+            output.append(out)
+            attention_scores.append(attention_weights)
 
-        output = torch.stack(output, dim=0) # (15, 1, bs, 5001)
-        output = torch.swapaxes(output[:,0,:,:], 0, 1) # (bs, 15, 5001)
+        output = torch.stack(output, dim=0)  # (15, 1, bs, 5001)
+        output = torch.swapaxes(output[:, 0, :, :], 0, 1)  # (bs, 15, 5001)
         attention_scores = torch.stack(attention_scores, 1)
         return output, attention_scores
 
-    def predict(self, features, word, hidden, carry, subject):
-        """ Forward method which takes a single word
+    def predict(self, features, word, hidden, carry):
+        """ Generate single word predictions given features and a prior word
         Parameters:
             features - betas
                 [bs, 360, 32]
@@ -181,57 +170,39 @@ class NIC(nn.Module):
                 [1, bs, units]
             carry - lstm carry state
                 == hidden
+        Returns:
+            out - [bs, vocab_size]
+            attention_weights - [bs, regions, 1]
+            hidden = carry - [1, bs, 512](?)
         """
-
-        # Select the right encoder
-        encoder  = self.encoders[subject]
-        # Encode features
-        features =  encoder(features) # (bs, 360, 32)
-        print("--predict--")
-        print("features:", features.shape)
-
         # Embed text
-        word = self.emb(word) # (bs, 1, 512)
-        word = torch.unsqeeuze(0)
-        print("word:", word.shape)
-        print("hidden:", hidden.shape)
+        word = self.emb(word)  # (bs, 1, 512)
 
-        context, attention_weights = self.attention(hidden, features) # out: [bs, 32], [bs, 360, 1]
-        context = torch.cat((context, word), axis=1) # (bs, 1, 32 + 512)
+        # Attention
+        context, attention_weights = self.attention(hidden, features)  # out: [bs, 32], [bs, 360, 1]
+        context = torch.cat((context, word), axis=1)  # (bs, 1, 32 + 512)
         context = context.unsqueeze(1)
 
         # LSTM
         _, (hidden, carry) = self.lstm(context, (hidden, carry))
         hidden = self.layer_norm(hidden)
-        seq = F.dropout(F.leaky_relu(hidden, 0.2), 0.1)
+        seq = F.leaky_relu(hidden, 0.2)
 
         # Decoder
-        out = self.decoder(seq)
+        out = self.decoder(seq)  # out: [1, bs, vocab_size]
+        out = out.squeeze(0)
 
         return out, attention_weights, hidden, carry
 
 
-    def cross_entropy(self, pred, target):
-        """ Compute cross entropy between two distributions """
-        return torch.mean(-torch.sum(target * torch.log(pred), dim=1))# (bs, 5001) -> (64) -> (1)
 
-    def accuracy(self, pred, target):
-        """ Accuracy computation """
-        target_arg_max = torch.argmax(target, dim=1)
-        pred_arg_max   = torch.argmax(pred, dim=1)
-        count = torch.sum(pred_arg_max == target_arg_max, dim=0)
-        return count / target_arg_max.shape[0]
-
-    def inference_step(self, data, target, subject):
-        # TODO: was implemented as a train-step, needs to be re-writetn for inference
+    def inference_step(self, features, word, hidden, carry, subject, max_len):
         """ Inference step
-        Passes one word at a time to the forward() method
+
         Parameters:
         -----------
             data - tuple
-                (features, caption, hidden, carry)
-            target - tensor
-                (bs, max_len, vocab_size)
+                (features, word, hidden, carry)
             subject - int
                 subject id [0, 8)
         Returns:
@@ -241,38 +212,31 @@ class NIC(nn.Module):
             loss - dict
         """
 
-        features, text, hidden, carry = data
-        hidden = hidden.unsqueeze(0)
-        carry  = carry.unsqueeze(0)
-
         # Select the right encoder
-        encoder  = self.encoders[subject]
+        encoder = self.encoders[subject]
         # Encode features
-        features = encoder(features) # (bs, 360, 32)
+        features = encoder(features)  # (bs, 360, 32)
 
-        max_len = target.shape[1]
-        loss = 0
-        acc  = 0
+        # Have to add dim to hidden state
+        hidden = hidden.unsqueeze(0)  # out: (1 bs, 512)
+        carry  = carry.unsqueeze(0)
 
         output = []
         attention_scores = []
         for i in range(max_len):
-            word = text[:,i]
-            out, attn_score, hidden, carry = self(features, word, hidden, carry, subject)
+            # Model call
+            out, attn_score, hidden, carry = self.predict(features, word, hidden, carry)
 
-            loss += self.cross_entropy(out[0], target[:,i,:])
-            acc  += self.accuracy(out[0], target[:,i,:]).float()
+            out = torch.argmax(out, dim=-1)
+            attention_scores.append(attn_score.detach())
+            output.append(out.detach())
 
-            attention_scores.append(attn_score)
-            output.append(out)
+            word = out
 
-        loss /= max_len
-        acc  /= max_len
-
-        output = torch.stack(output, dim=0) # (15, 1, bs, 5001)
-        output = torch.swapaxes(output[:,0,:,:], 0, 1) # (bs, 15, 5001)
-        attention_scores = torch.stack(attention_scores, 1)
-        return output, attention_scores, {'loss':loss, 'accuracy':acc}
+        output = torch.stack(output, dim=0)  # out: (max_len, bs)
+        output = torch.swapaxes(output, 1, 0)  # out: (bs, max_len)
+        attention_scores = torch.stack(attention_scores, 1)  # out: (bs, max_len, regions, 1)
+        return output, attention_scores
 
 
     def train_step(self, data, target, subject):
@@ -285,20 +249,29 @@ class NIC(nn.Module):
         subject - int
             subject index for encoder selection [0, 8)
         """
-        output, attention_scores = self(data, subject)
+        output, attention_scores = self(data, subject)  # out: [bs, max_len, vocab_size], [bs, max_len, regions, 1]
 
         loss = 0
         acc = 0
         max_len = target.shape[1]
         for i in range(max_len):
-            loss += self.cross_entropy(output[:,i,:], target[:,i,:])
-            acc += self.accuracy(output[:,i,:], target[:,i,:]).float()
+            loss += self.cross_entropy(output[:, i, :], target[:, i, :])
+            acc += self.accuracy(output[:, i, :], target[:, i, :]).float()
 
         loss /= max_len
         acc  /= max_len
 
-        return output, attention_scores, {'loss':loss, 'accuracy':acc}
+        return output, attention_scores, {'loss': loss, 'accuracy': acc}
 
 
+    def cross_entropy(self, pred, target):
+        """ Compute cross entropy between two distributions """
+        return torch.mean(-torch.sum(target * torch.log(pred), dim=1))  # (bs, 5001) -> (64) -> (1)
 
 
+    def accuracy(self, pred, target):
+        """ Accuracy computation """
+        target_arg_max = torch.argmax(target, dim=1)
+        pred_arg_max   = torch.argmax(pred, dim=1)
+        count = torch.sum(pred_arg_max == target_arg_max, dim=0)
+        return count / target_arg_max.shape[0]

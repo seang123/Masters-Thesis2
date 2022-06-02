@@ -1,14 +1,16 @@
 ---
  # Name the current run
- run: multi_subject_torch3
+ run: torch_s2
 
  info: | 
-     fixed a potentially bug in the LSTM -
-     which before was applying recursive dropout and relu activation to the hidden layer
-     changes to how loss is saved 
+     testing that the pytorch imp is actually correct for 1 sub
+     subs 2
+     layer norm on encoder and lstm hidden state
      pytorch model
      8 subjects
      layer norm on lstm and encoders
+
+ log: "/home/hpcgies1/rds/hpc-work/NIC/Log/"
 
  # Data stores
  dataset:
@@ -17,12 +19,11 @@
      #captions_path: "/fast/seagie/data/subj_2/captions/"
      captions_path: "/home/hpcgies1/rds/hpc-work/NIC/Data/captions/"
      nsd_dir: "/home/hpcgies1/rds/hpc-work/NIC/NSD"
-     log: "/home/hpcgies1/rds/hpc-work/NIC/Log/"
 
  seed: 42
 
  # Training
- epochs: 25
+ epochs: 50
  batch_size: 128
  max_length: 15
  top_k: 5000 # vocab size
@@ -31,12 +32,12 @@
  clipnorm: 0.1
  decay: 0 #1.0e-4
 
- dropout_input: 0 # 0.1 
- dropout_features: 0.2
- dropout_text: 0.2
- dropout_lstm: 0.2 
- dropout_attn: 0.2 
- dropout_out: 0.2
+ dropout_input: 0
+ dropout_features: 0.1
+ dropout_text: 0.1
+ dropout_lstm: 0.1
+ dropout_attn: 0.1 
+ dropout_out: 0.1
 
  input_reg: 0.01         # scientific notation requires decimal notation - x.0e
  attn_reg: 0.001

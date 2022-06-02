@@ -123,11 +123,11 @@ def timeit(func):
     def wrapper(*args, **kwargs):
         start = time.perf_counter()
         out = func(*args, **kwargs)
-        print(f"> {func.__name__} - {(time.perf_counter() - start):.3f} sec")
+        print(f"> {func.__name__} :: {(time.perf_counter() - start):.3f} sec")
         return out
     return wrapper
 
-class Timer(object):
+class Timer():
     def __init__(self, name):
         self.name = name
     def __enter__(self):
@@ -358,7 +358,7 @@ def load_split_betas(subj = '2'):
         test_betas = betas[test_idx, :]
     return train_betas, val_betas, test_betas
 
-def load_subs(subs = [1,2,3,4,5,6,7,8]):
+def load_subs(subs = [1, 2, 3, 4, 5, 6, 7, 8]):
     train_pairs = []
     val_pairs = []
     test_pairs = []
