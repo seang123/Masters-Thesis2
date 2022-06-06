@@ -13,7 +13,7 @@ import logging
 import pandas as pd
 from DataLoaders import load_avg_betas2 as loader
 from Model.torch_model import NIC
-from DataLoaders.torch_generator import Dataset
+from DataLoaders.torch_generator import Dataset, Dataset_mix
 from torchinfo import summary
 import argparse
 
@@ -129,7 +129,64 @@ def testing():
     return train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas
 
 
+def testing2():
+    train_pairs = []
+    val_pairs   = []
+    test_pairs  = []
+    for sub in range(1, 9):
+        t, v, te = loader.get_nsd_keys(str(sub))
+        train_pairs.append(loader.create_pairs(t, str(sub))[:90])
+        if sub != 4 and sub != 8:
+            val_pairs.append(loader.create_pairs(v, str(sub))[:48])
+        test_pairs.append(loader.create_pairs(te, str(sub))[:51])
+
+    train_pairs = np.array(train_pairs)
+    val_pairs = np.array(val_pairs)
+    test_pairs = np.array(test_pairs)
+    train_betas = {}
+    val_betas = {}
+    test_betas = {}
+    for sub in range(1, 9):
+        train_betas[str(sub)] = np.random.uniform(0, 1, (90, 327684))
+        val_betas[str(sub)] = np.random.uniform(0, 1, (48, 327684))
+        test_betas[str(sub)] = np.random.uniform(0, 1, (51, 327684))
+    return train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas
+
+
 print("------ Data ------")
+
+
+def init_dataset_mix(train_subs: list):
+    """ Generated a mixed dataset """
+    #train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = loader.load_subs(train_subs)  # (subs 4 and 8 val set is == test set)
+
+    train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = testing2()
+
+    print("train_pairs:", train_pairs.shape)
+    print("val_pairs:", val_pairs.shape)
+    print("test_pairs:", test_pairs.shape)
+
+    #def batchify(pairs: np.array):
+    #    # (subs, samples, 4)
+
+    # Flatten the pairs
+    train_pairs = [i for sublist in train_pairs for i in sublist]  # flatten the pairs
+    val_pairs   = [i for sublist in val_pairs for i in sublist]  # flatten the pairs
+    test_pairs  = [i for sublist in test_pairs for i in sublist]  # flatten the pairs
+
+    print("train_pairs:", len(train_pairs))
+    print("val_pairs:", len(val_pairs))
+    print("test_pairs:", len(test_pairs))
+
+    train_dataset = Dataset_mix(train_pairs, train_betas, tokenizer, config['units'], config['max_length'], vocab_size, device)
+    train_generator = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
+
+    val_dataset = Dataset_mix(val_pairs, val_betas, tokenizer, config['units'], config['max_length'], vocab_size, device)
+    val_generator = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+
+    test_dataset = Dataset_mix(test_pairs, test_betas, tokenizer, config['units'], config['max_length'], vocab_size, device)
+    test_generator = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    return train_generator, val_generator, test_generator
 
 
 def init_dataset(train_subs: list = [1, 2, 3, 4, 5, 6, 7, 8], val_subs: list = [1, 2, 3, 5, 6, 7], get_test=True):
@@ -170,16 +227,20 @@ def init_dataset(train_subs: list = [1, 2, 3, 4, 5, 6, 7, 8], val_subs: list = [
     return train_generators, val_generators, test_generators, n_subjects
 
 
-train_subs = [2]  # [1, 2, 3, 4, 5, 6, 7, 8]
-val_subs   = [2]
-
+train_subs = [2, 4]  # [1, 2, 3, 4, 5, 6, 7, 8]
+val_subs   = [2, 4]
+n_subjects = len(train_subs)
+"""
 if training:
     train_generators, val_generators, _, n_subjects = init_dataset(train_subs, val_subs)
 else:
     train_generators, _, test_generators, n_subjects = init_dataset(train_subs, val_subs)
 
 print(">> N subjects:", n_subjects, "<<")
+"""
+train_generator, val_generator, test_generator = init_dataset_mix(train_subs)
 
+raise
 
 #
 # ------------- Model ------------
@@ -192,17 +253,18 @@ optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), weight_
 
 
 # Initialise the model with one batch of data
-with torch.no_grad():
-    for sub in train_subs:
-        generator = train_generators[str(sub)]
-        encoder_idx = train_subs.index(sub)
-        for batch_nr, data in enumerate(generator):
-            features, captions, hidden, carry, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device)
+if training==False:
+    with torch.no_grad():
+        for sub in train_subs:
+            generator = train_generators[str(sub)]
+            encoder_idx = train_subs.index(sub)
+            for batch_nr, data in enumerate(generator):
+                features, captions, hidden, carry, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device)
 
-            # Model pass
-            output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=encoder_idx)  # (bs, max_len, vocab_size)
-            break
-        print(f"Model initalised on sub: {sub}")
+                # Model pass
+                output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=encoder_idx)  # (bs, max_len, vocab_size)
+                break
+            print(f"Model initalised on sub: {sub}")
 
 
 def L2_loss(parameters, alpha):
@@ -320,6 +382,7 @@ def train(model, optimizer, criterion):
 
 
     # ---- Post training ----
+    return
 
 
 def load_model(model, path):
@@ -398,6 +461,7 @@ def generate_predictions(model, epoch: int, generators: dict):
         f.write(tokenizer.to_json())
 
     print(f"Inference complete! ({(time.time() - start_time):.1f}s)")
+    return
 
 
 def inference(model, path, generators: dict):

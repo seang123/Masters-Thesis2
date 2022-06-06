@@ -14,6 +14,7 @@ from collections import defaultdict
 from ian_code import nsd_get_data as ngd
 import yaml
 import nibabel as nb
+from functools import lru_cache
 #from concurrent.futures import ThreadPoolExecutor
 """
 
@@ -151,6 +152,8 @@ def load_tokenizer():
     print("Loading tokenizer from disk: fit on all 73k NSD images with vocab size of 5000")
     return tokenizer_from_json(json.load(open(f"{thesis_dir}/TrainData/tokenizer_73k.json", "r")))
 
+
+@lru_cache(maxsize=None)
 def load_all_captions():
     """ Reads captions from text file and returns list of list of captions """
     ls = defaultdict(list)
@@ -347,16 +350,17 @@ def load_split_betas(subj = '2'):
     # Load betas file
     with Timer('Load betas'):
         betas = np.load(
-                open(f"/home/hpcgies1/rds/hpc-work/NIC/Data/subj0{subj}/betas_averaged/all_betas.npy", "rb"))
+            open(f"/home/hpcgies1/rds/hpc-work/NIC/Data/subj0{subj}/betas_averaged/all_betas.npy", "rb"))
     # Split betas array
     with Timer('Split betas'):
         train_betas = betas[train_idx, :]
         if val_idx.shape[0] > 0:
             val_betas = betas[val_idx, :]
         else:
-            val_betas = np.zeros((1,1))
+            val_betas = np.zeros((1, 1))
         test_betas = betas[test_idx, :]
     return train_betas, val_betas, test_betas
+
 
 def load_subs(subs = [1, 2, 3, 4, 5, 6, 7, 8]):
     train_pairs = []
@@ -366,14 +370,17 @@ def load_subs(subs = [1, 2, 3, 4, 5, 6, 7, 8]):
     val_betas = {}
     test_betas = {}
     for sub in subs:
+        # Load keys and create pairs
         train_keys, val_keys, test_keys = get_nsd_keys(str(sub))
         train_pair = np.array(create_pairs(train_keys, str(sub)))
         val_pair   = np.array(create_pairs(val_keys, str(sub)))
         test_pair  = np.array(create_pairs(test_keys, str(sub), single=True))
+        # Store
         train_pairs.append(train_pair)
         val_pairs.append(val_pair)
         test_pairs.append(test_pair)
 
+        # Load betas: {sub: np.array}
         train_beta, val_beta, test_beta = load_split_betas(str(sub))
         train_betas[str(sub)] = train_beta
         val_betas[str(sub)] = val_beta
