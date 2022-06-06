@@ -22,9 +22,14 @@ class LocallyConnected(nn.Module):
     def forward(self, x):
         """ Forward pass """
         # Loop through the layers, take the relevant indices from x as input
+        #output = [F.dropout(F.leaky_relu(self.norm(layer(
+        #    x[:, self.in_groups[i]])), 0.2), 0.2) for (i, layer) in enumerate(self.layers)]
+        #return torch.stack(output, dim=1)  # (bs, 360, 32)
+
+        # Single sample from batch
         output = [F.dropout(F.leaky_relu(self.norm(layer(
-            x[:, self.in_groups[i]])), 0.2), 0.2) for (i, layer) in enumerate(self.layers)]
-        return torch.stack(output, dim=1)  # (bs, 360, 32)
+            x[self.in_groups[i]])), 0.2), 0.2) for (i, layer) in enumerate(self.layers)]
+        return torch.stack(output, dim=0)
 
 
 
@@ -69,7 +74,7 @@ class Attention(nn.Module):
 
 class NIC(nn.Module):
 
-    def __init__(self, groups, embedding_dim_feat, embedding_dim_text, units, max_len, vocab_size, n_subjects=8):
+    def __init__(self, groups, embedding_dim_feat, embedding_dim_text, units, max_len, vocab_size, subjects):  #, n_subjects=8):
         """
         Parameters:
         -----------
@@ -85,9 +90,11 @@ class NIC(nn.Module):
         print("in_groups:", len(in_groups), "out_groups:", len(out_groups))
 
         # Encoders
-        self.encoders = nn.ModuleList()
-        for i in range(n_subjects):
-            self.encoders.append(LocallyConnected(groups, embedding_dim_feat))
+        #self.encoders = nn.ModuleList()
+        #for i in range(n_subjects):
+        #    self.encoders.append(LocallyConnected(groups, embedding_dim_feat))
+        self.encoders = nn.ModuleDict([[str(i), LocallyConnected(groups, embedding_dim_feat)] for i in subjects])
+        print("Encoder ModuleDict:", self.encoders.keys())
 
         # Attention Mechanism
         self.attention = Attention(embedding_dim_feat, units, 32)
@@ -127,10 +134,15 @@ class NIC(nn.Module):
         c = c.unsqueeze(0)
 
         # Select the right encoder
-        encoder  = self.encoders[subject]
-
+        #encoder  = self.encoders[subject]
         # Encode features
-        features = encoder(features)  # (bs, 360, 32)
+        #features = encoder(features)  # (bs, 360, 32)
+
+        # Loop through the batch to select the right encoder for each sample
+        features_ = torch.zeros((features.shape[0], 360, 32))  # [bs, regions, dim]
+        for i, sub in enumerate(subject):
+            features_[i] = self.encoders[str(sub.item())](features[i])
+        features = features_
 
         # Embed text
         text = self.emb(text)

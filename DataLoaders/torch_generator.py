@@ -19,6 +19,10 @@ class Dataset_mix(torch.utils.data.Dataset):
         self.vocab_size = vocab_size
         self.device = device
 
+        print("Dataset_mix")
+        print("pair:", len(self.pairs))
+        print("betas:", betas.keys())
+
     def __len__(self):
         return len(self.pairs)
 
@@ -26,9 +30,11 @@ class Dataset_mix(torch.utils.data.Dataset):
         # Get sample information
         nsd_key, cap, idx, sub = self.pairs[index]
         idx = idx.astype(np.int32)
-        sub = torch.IntTensor(sub)
         # Get beta
         betas = torch.from_numpy(self.betas[sub][idx, :].astype(np.float32))  # [327684]
+
+        # Sub to Tensor (str -> IntTensor)
+        sub = torch.IntTensor([int(sub)])
 
         # Tokenize caption
         cap_seqs = self.tokenizer.texts_to_sequences([cap])

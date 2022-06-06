@@ -158,16 +158,17 @@ print("------ Data ------")
 
 def init_dataset_mix(train_subs: list):
     """ Generated a mixed dataset """
-    #train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = loader.load_subs(train_subs)  # (subs 4 and 8 val set is == test set)
+    train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = loader.load_subs(train_subs)  # (subs 4 and 8 val set is == test set)
 
-    train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = testing2()
+    #train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = testing2()
 
-    print("train_pairs:", train_pairs.shape)
-    print("val_pairs:", val_pairs.shape)
-    print("test_pairs:", test_pairs.shape)
+    def batchify(pairs: np.array):
+        # (subs, samples, 4)
+        return
 
-    #def batchify(pairs: np.array):
-    #    # (subs, samples, 4)
+    #train_pairs = [batchify(i) for i in train_pairs]
+    #print(len(train_pairs))
+    #print(len(train_pairs[0]))
 
     # Flatten the pairs
     train_pairs = [i for sublist in train_pairs for i in sublist]  # flatten the pairs
@@ -240,12 +241,10 @@ print(">> N subjects:", n_subjects, "<<")
 """
 train_generator, val_generator, test_generator = init_dataset_mix(train_subs)
 
-raise
-
 #
 # ------------- Model ------------
 #
-model = NIC(groups, 32, 512, 512, config['max_length'], vocab_size, n_subjects=n_subjects).to(device)
+model = NIC(groups, 32, 512, 512, config['max_length'], vocab_size, subjects=train_subs).to(device)  # n_subjects=n_subjects).to(device)
 criterion = nn.CrossEntropyLoss(reduction='none')
 optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), weight_decay=3.0e-5)  # 0.0003
 #for k, v in enumerate(train_generators['1']):
@@ -284,6 +283,45 @@ def accuracy(pred, target):
     target_arg_max = torch.argmax(target, dim=1)
     pred_arg_max   = torch.argmax(pred, dim=1)
     return torch.sum(pred_arg_max == target_arg_max)  # should be (bs,)
+
+
+def train_mix(model, optimizer, criterion):
+    """ Trains on mixed batches """
+
+    for epoch in range(1, epochs + 1):
+        epoch_loss = defaultdict(list)
+
+        for batch_nr, data in enumerate(train_generator):
+            batch_time = time.time()
+            features, captions, hidden, carry, subjects, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device), data[5].to(device)
+
+            # DataLoader time
+            prepare_time = batch_time - time.time()
+
+            # Zero gradients
+            optimizer.zero_grad()
+
+            # Model pass
+            output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=subjects)  # (bs, max_len, vocab_size)
+
+            # Model forward pass time
+            model_time = batch_time - prepare_time - time.time()
+
+            l2_loss_enc = L2_loss(model.parameters(), 0.01)
+
+            # Backprop
+            loss = loss_dict['loss']
+            loss += l2_loss_enc  # Add encoder l2
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss['loss'].append(loss.detach())
+            epoch_loss['accuracy'].append(loss_dict['accuracy'].detach())
+
+            process_time = batch_time - time.time() - prepare_time
+            # Print information
+            if batch_nr % 25 == 0:
+                print(f"epoch: {epoch:02}/{epochs} | {batch_nr:03} | loss: {np.mean(epoch_loss['sub_epoch_loss']):.3f} | acc: {np.mean(epoch_loss['sub_epoch_acc']):.3f} | comp. eff.: {(process_time/(process_time+prepare_time)):.3f}")
 
 
 def train(model, optimizer, criterion):
@@ -477,7 +515,8 @@ def inference(model, path, generators: dict):
 if __name__ == '__main__':
 
     if training:
-        train(model, optimizer, criterion)
+        #train(model, optimizer, criterion)
+        train_mix(model, optimizer, criterion)
         print("Done.")
     else:
         print("Running inference")

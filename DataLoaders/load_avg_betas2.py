@@ -296,6 +296,7 @@ def create_pairs(keys: list, subj='2', single=False):
                 break
     return pairs
 
+
 def batchify(pairs: list, batch_size: int = 64):
     """ Given a list of pairs for each subject (train or val or test) split them into subsets of size batch_size
     with each batch holding data for one subject
@@ -314,8 +315,9 @@ def batchify(pairs: list, batch_size: int = 64):
     batches = []
     for p in range(pairs.shape[0]):
         for i in range(0, len(pairs[p]), batch_size):
-            batches.append(pairs[p][i:i+batch_size])
+            batches.append(pairs[p][i:i + batch_size])
     return batches
+
 
 @timeit
 def load_split_betas(subj = '2'):

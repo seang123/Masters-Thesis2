@@ -1,6 +1,6 @@
 ---
  # Name the current run
- run: torch_s2
+ run: torch_test
 
  info: | 
      testing that the pytorch imp is actually correct for 1 sub
