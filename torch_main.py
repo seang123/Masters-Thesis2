@@ -13,9 +13,11 @@ import logging
 import pandas as pd
 from DataLoaders import load_avg_betas2 as loader
 from Model.torch_model import NIC
-from DataLoaders.torch_generator import Dataset, Dataset_mix
+from DataLoaders.torch_generator import Dataset, Dataset_mix, Dataset_batch
 from torchinfo import summary
 import argparse
+from rich.console import Console
+console = Console()
 
 ## ======= Arg parse =========
 parser = argparse.ArgumentParser(description='NIC model')
@@ -77,7 +79,8 @@ np.random.seed(config['seed'])
 training = True
 if args.eval:
     training = False
-print(f"-- Training = {training} --")
+#print(f"-- Training = {training} --")
+console.print( str(("Training = [bold red]False[/bold red]" if training==False else "Training = [bold green]True[/bold green]")) , highlight=False)
 
 vocab_size = config['top_k'] + 1
 groups = loader.get_groups(config['group_size'], separate_hemi=True)
@@ -128,17 +131,17 @@ def testing():
         test_betas[str(sub)] = np.random.uniform(0, 1, (51, 327684))
     return train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas
 
-
+@loader.timeit
 def testing2():
     train_pairs = []
     val_pairs   = []
     test_pairs  = []
     for sub in range(1, 9):
         t, v, te = loader.get_nsd_keys(str(sub))
-        train_pairs.append(loader.create_pairs(t, str(sub))[:90])
+        train_pairs.append(loader.create_pairs(t, str(sub))[:190])
         if sub != 4 and sub != 8:
-            val_pairs.append(loader.create_pairs(v, str(sub))[:48])
-        test_pairs.append(loader.create_pairs(te, str(sub))[:51])
+            val_pairs.append(loader.create_pairs(v, str(sub))[:148])
+        test_pairs.append(loader.create_pairs(te, str(sub))[:151])
 
     train_pairs = np.array(train_pairs)
     val_pairs = np.array(val_pairs)
@@ -147,9 +150,9 @@ def testing2():
     val_betas = {}
     test_betas = {}
     for sub in range(1, 9):
-        train_betas[str(sub)] = np.random.uniform(0, 1, (90, 327684))
-        val_betas[str(sub)] = np.random.uniform(0, 1, (48, 327684))
-        test_betas[str(sub)] = np.random.uniform(0, 1, (51, 327684))
+        train_betas[str(sub)] = np.random.uniform(0, 1, (190, 327684))
+        val_betas[str(sub)] = np.random.uniform(0, 1, (148, 327684))
+        test_betas[str(sub)] = np.random.uniform(0, 1, (151, 327684))
     return train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas
 
 
@@ -159,34 +162,43 @@ print("------ Data ------")
 def init_dataset_mix(train_subs: list):
     """ Generated a mixed dataset """
     train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = loader.load_subs(train_subs)  # (subs 4 and 8 val set is == test set)
+    #train_pairs = np.array(train_pairs)
+    #val_pairs   = np.array(val_pairs)
+    #test_pairs  = np.array(test_pairs)
 
-    #train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = testing2()
+    #train_pairs, val_pairs, test_pairs, train_betas, val_betas, test_betas = testing2()  # train_pairs: [subs, samples, 4]
 
-    def batchify(pairs: np.array):
-        # (subs, samples, 4)
-        return
+    def batchify(pairs: list, batch_size: int):
+        # [subs, samples, 4]
+        batches = []
+        #for p in range(pairs.shape[0]):
+        for p in range(len(pairs)):
+            b = []
+            for i in range(0, len(pairs[p]), batch_size):
+                b.append(pairs[p][i:i + batch_size])
+            batches.append(b)
+        return batches
 
-    #train_pairs = [batchify(i) for i in train_pairs]
-    #print(len(train_pairs))
-    #print(len(train_pairs[0]))
+    train_pairs = batchify(train_pairs, batch_size) #  [subs, batches, batch_size, 4]
+    val_pairs   = batchify(val_pairs, batch_size)
+    test_pairs  = batchify(test_pairs, batch_size)
+    print("train_pairs:", len(train_pairs), "// train_pairs[0]:", len(train_pairs[0]), "// train_pairs[0][0]:", len(train_pairs[0][0]))
 
     # Flatten the pairs
     train_pairs = [i for sublist in train_pairs for i in sublist]  # flatten the pairs
     val_pairs   = [i for sublist in val_pairs for i in sublist]  # flatten the pairs
     test_pairs  = [i for sublist in test_pairs for i in sublist]  # flatten the pairs
 
-    print("train_pairs:", len(train_pairs))
-    print("val_pairs:", len(val_pairs))
-    print("test_pairs:", len(test_pairs))
+    # Init Generators
+    train_dataset = Dataset_batch(train_pairs, train_betas, tokenizer, config['units'], config['max_length'], vocab_size, batch_size, device)
+    train_generator = torch.utils.data.DataLoader(train_dataset, batch_size=None, shuffle=True, num_workers=0, pin_memory=True)
 
-    train_dataset = Dataset_mix(train_pairs, train_betas, tokenizer, config['units'], config['max_length'], vocab_size, device)
-    train_generator = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    val_dataset = Dataset_batch(val_pairs, val_betas, tokenizer, config['units'], config['max_length'], vocab_size, batch_size, device)
+    val_generator = torch.utils.data.DataLoader(val_dataset, batch_size=None, shuffle=False, num_workers=0, pin_memory=True)
 
-    val_dataset = Dataset_mix(val_pairs, val_betas, tokenizer, config['units'], config['max_length'], vocab_size, device)
-    val_generator = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+    test_dataset = Dataset_batch(test_pairs, test_betas, tokenizer, config['units'], config['max_length'], vocab_size, batch_size, device)
+    test_generator = torch.utils.data.DataLoader(test_dataset, batch_size=None, shuffle=False, num_workers=0, pin_memory=True)
 
-    test_dataset = Dataset_mix(test_pairs, test_betas, tokenizer, config['units'], config['max_length'], vocab_size, device)
-    test_generator = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
     return train_generator, val_generator, test_generator
 
 
@@ -228,8 +240,8 @@ def init_dataset(train_subs: list = [1, 2, 3, 4, 5, 6, 7, 8], val_subs: list = [
     return train_generators, val_generators, test_generators, n_subjects
 
 
-train_subs = [2, 4]  # [1, 2, 3, 4, 5, 6, 7, 8]
-val_subs   = [2, 4]
+train_subs = [1, 2, 3, 4, 5, 6, 7, 8]  # [1, 2, 3, 4, 5, 6, 7, 8]
+val_subs   = [1, 2, 3, 5, 6, 7]
 n_subjects = len(train_subs)
 """
 if training:
@@ -244,7 +256,7 @@ train_generator, val_generator, test_generator = init_dataset_mix(train_subs)
 #
 # ------------- Model ------------
 #
-model = NIC(groups, 32, 512, 512, config['max_length'], vocab_size, subjects=train_subs).to(device)  # n_subjects=n_subjects).to(device)
+model = NIC(groups, 32, 512, 512, config['max_length'], vocab_size, subjects=[1, 2, 3, 4, 5, 6, 7, 8]).to(device)  # n_subjects=n_subjects).to(device)
 criterion = nn.CrossEntropyLoss(reduction='none')
 optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), weight_decay=3.0e-5)  # 0.0003
 #for k, v in enumerate(train_generators['1']):
@@ -254,15 +266,18 @@ optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), weight_
 # Initialise the model with one batch of data
 if training==False:
     with torch.no_grad():
+        """
         for sub in train_subs:
             generator = train_generators[str(sub)]
             encoder_idx = train_subs.index(sub)
-            for batch_nr, data in enumerate(generator):
-                features, captions, hidden, carry, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device)
+        """
+        for batch_nr, data in enumerate(train_generator):
+            features, captions, hidden, carry, subject, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device), data[5].to(device)
+            subject = str(subject.item())
 
-                # Model pass
-                output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=encoder_idx)  # (bs, max_len, vocab_size)
-                break
+            # Model pass
+            output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=subject)  # (bs, max_len, vocab_size)
+            break
             print(f"Model initalised on sub: {sub}")
 
 
@@ -286,14 +301,20 @@ def accuracy(pred, target):
 
 
 def train_mix(model, optimizer, criterion):
-    """ Trains on mixed batches """
+    """ Trains on alternating batches """
 
+    losses = []
     for epoch in range(1, epochs + 1):
+        print(f" ---== Epoch :: {epoch} ==---")
         epoch_loss = defaultdict(list)
 
+        model.train()
         for batch_nr, data in enumerate(train_generator):
             batch_time = time.time()
-            features, captions, hidden, carry, subjects, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device), data[5].to(device)
+            features, captions, hidden, carry, subject, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device), data[5].to(device)
+            subject = str(subject.item())
+            #if features.shape[0] != batch_size:
+            #    continue
 
             # DataLoader time
             prepare_time = batch_time - time.time()
@@ -302,27 +323,77 @@ def train_mix(model, optimizer, criterion):
             optimizer.zero_grad()
 
             # Model pass
-            output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=subjects)  # (bs, max_len, vocab_size)
+            output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=subject)  # (bs, max_len, vocab_size)
 
             # Model forward pass time
             model_time = batch_time - prepare_time - time.time()
 
+            # L2 loss - encoder
             l2_loss_enc = L2_loss(model.parameters(), 0.01)
 
             # Backprop
             loss = loss_dict['loss']
-            loss += l2_loss_enc  # Add encoder l2
-            loss.backward()
+            total_loss = loss + l2_loss_enc  # Add encoder l2
+            total_loss.backward()
             optimizer.step()
 
-            epoch_loss['loss'].append(loss.detach())
-            epoch_loss['accuracy'].append(loss_dict['accuracy'].detach())
+            # Store loss data
+            loss_ = loss.detach().item()
+            acc_  = loss_dict['accuracy'].detach().item()
+            l2_loss_enc_ = l2_loss_enc.detach().item()
+
+            epoch_loss['loss'].append(loss_)
+            epoch_loss['accuracy'].append(acc_)
+            epoch_loss['L2'].append(l2_loss_enc_)
+            losses.append({'epoch': epoch, 'batch': batch_nr, 'subject': subject, 'loss': loss_, 'enc-L2': l2_loss_enc_, 'accuracy': acc_})
 
             process_time = batch_time - time.time() - prepare_time
             # Print information
             if batch_nr % 25 == 0:
-                print(f"epoch: {epoch:02}/{epochs} | {batch_nr:03} | loss: {np.mean(epoch_loss['sub_epoch_loss']):.3f} | acc: {np.mean(epoch_loss['sub_epoch_acc']):.3f} | comp. eff.: {(process_time/(process_time+prepare_time)):.3f}")
+                print(f"epoch: {epoch:02}/{epochs} | {batch_nr:03} | loss: {np.mean(epoch_loss['loss']):.3f} | enc-L2: {np.mean(epoch_loss['L2']):.3f} | acc: {np.mean(epoch_loss['accuracy']):.3f} | comp. eff.: {(process_time/(process_time+prepare_time)):.3f}")
+        print(f"Epoch: {epoch} complete!")
 
+        # Evaluation
+        # ----------
+        model.eval()
+        with torch.no_grad():
+            for batch_nr, data in enumerate(val_generator):
+                features, captions, hidden, carry, subject, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device), data[5].to(device)
+                subject = str(subject.item())
+                #if features.shape[0] != batch_size:
+                #    continue
+
+                # Zero gradients
+                optimizer.zero_grad()
+
+                # Model pass
+                output, _, loss_dict = model.train_step((features, captions, hidden, carry), target, subject=subject)  # (bs, max_len, vocab_size)
+
+                # L2 loss - encoder
+                l2_loss_enc = L2_loss(model.parameters(), 0.01)
+
+                # Backprop
+                loss = loss_dict['loss']
+                total_loss = loss + l2_loss_enc  # Add encoder l2
+
+                loss_ = loss.detach().item()
+                acc_  = loss_dict['accuracy'].detach().item()
+                l2_loss_enc_ = l2_loss_enc.detach().item()
+
+                epoch_loss['val_loss'].append(loss_)
+                epoch_loss['val_accuracy'].append(acc_)
+                epoch_loss['val_L2'].append(l2_loss_enc_)
+                losses.append({'epoch': epoch, 'batch': batch_nr, 'subject': subject, 'val_loss': loss_, 'enc-L2': l2_loss_enc_, 'val_accuracy': acc_})
+
+            print(f"validation: {epoch:02}/{epochs} | loss: {np.mean(epoch_loss['val_loss']):.3f} | enc-L2: {np.mean(epoch_loss['val_L2']):.3f} | accuracy: {np.mean(epoch_loss['val_accuracy']):.3f}")
+
+
+        # --- Post epoch ---
+        torch.save({'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict()}, f'{run_path}/model/model_ep{epoch:03}.pt')
+        pd.DataFrame(losses).to_csv(f"{run_path}/loss_history.csv", mode='w', header=not os.path.exists(f"{run_path}/loss_history.csv"))  # use mode='a' if appending
+    # --- Post training ---
+    print("Training Complete!")
+    return
 
 def train(model, optimizer, criterion):
 
@@ -435,6 +506,54 @@ def load_model(model, path):
     return model, epoch, loss
 
 
+def generate_predictions_batch(model, epoch:int, generator):
+    """ Generate predictions from """
+
+    outputs = defaultdict(list)
+    attention_maps = defaultdict(list)
+
+    start_time = time.time()
+    model.eval()
+    with torch.no_grad():
+        for batch_nr, data in enumerate(generator):
+            features, captions, hidden, carry, subject, target = data[0].to(device), data[1].to(device), data[2].to(device), data[3].to(device), data[4].to(device), data[5]
+            subject = str(subject.item())
+
+            # Start word
+            start_seq = np.repeat([tokenizer.word_index['<start>']], features.shape[0])
+            start_seq = torch.from_numpy(start_seq).to(device)
+
+            output, attn_map = model.inference_step(features, start_seq, hidden, carry, subject, max_len)  # [bs, max_len], [bs, max_len, regions, 1]
+
+            outputs[subject].append(output.numpy())
+            attention_maps[subject].append(attn_map.numpy())
+
+    output = []
+    for (k,v) in outputs.items():
+        temp = [i for sublist in v for i in sublist]
+        temp = np.stack(temp, axis=0)  # (515, 15)
+        output.append(temp)
+    output = np.stack(output, axis=0)
+    print("output:", output.shape)
+
+    attention_map = []
+    for (k,v) in attention_maps.items():
+        temp = [i for sublist in v for i in sublist]
+        temp = np.stack(temp, axis=0)
+        attention_map.append(temp)
+    attention_map = np.stack(attention_map, axis=0)
+    print("attenion_map:", attention_map.shape)
+
+    add_name = ""
+    np.save(open(f"{out_path}/output_captions_{epoch}{add_name}.npy", "wb"), output)
+    np.save(open(f"{out_path}/attention_scores_{epoch}{add_name}.npy", "wb"), attention_map)
+    with open(f"{out_path}/tokenizer.json", "w") as f:
+        f.write(tokenizer.to_json())
+
+    print(f"Inference complete! ({(time.time() - start_time):.1f}s)")
+
+    return
+
 def generate_predictions(model, epoch: int, generators: dict):
     """ Generate predictions
 
@@ -508,7 +627,7 @@ def inference(model, path, generators: dict):
     model, epoch, _ = load_model(model, path)
     print("> Model loaded <")
     # Run inference
-    generate_predictions(model, epoch, generators)
+    generate_predictions_batch(model, epoch, generators)
     return
 
 
@@ -522,5 +641,6 @@ if __name__ == '__main__':
         print("Running inference")
         #inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/multi_subject_torch4/model/model_ep009.pt" # 001, 009, 029
         #inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/multi_subject_torch_3subs/model/model_ep014.pt"
-        inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/torch_s2/model/model_ep014.pt"
-        inference(model, inf_model, test_generators)
+        inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/torch_alt_batches/model/model_ep008.pt"
+        inference(model, inf_model, test_generator)
+        #inference(model, inf_model, test_generators)

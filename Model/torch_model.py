@@ -22,15 +22,9 @@ class LocallyConnected(nn.Module):
     def forward(self, x):
         """ Forward pass """
         # Loop through the layers, take the relevant indices from x as input
-        #output = [F.dropout(F.leaky_relu(self.norm(layer(
-        #    x[:, self.in_groups[i]])), 0.2), 0.2) for (i, layer) in enumerate(self.layers)]
-        #return torch.stack(output, dim=1)  # (bs, 360, 32)
-
-        # Single sample from batch
         output = [F.dropout(F.leaky_relu(self.norm(layer(
-            x[self.in_groups[i]])), 0.2), 0.2) for (i, layer) in enumerate(self.layers)]
-        return torch.stack(output, dim=0)
-
+            x[:, self.in_groups[i]])), 0.2), 0.2) for (i, layer) in enumerate(self.layers)]
+        return torch.stack(output, dim=1)  # (bs, 360, 32)
 
 
 
@@ -61,7 +55,7 @@ class Attention(nn.Module):
         hidden_with_time_axis = torch.swapaxes(hidden, 0, 1)  # out: [bs, 1, 512]
 
         attention_hidden_layer = torch.tanh(
-            F.relu(self.W1(features)) + F.relu(self.W2(hidden_with_time_axis)))  # out: [bs, 360, 32]
+            F.leaky_relu(self.W1(features), 0.2) + F.leaky_relu(self.W2(hidden_with_time_axis), 0.2))  # out: [bs, 360, 32]
 
         score = self.V(attention_hidden_layer)  # out: [bs, 360, 1]
         attention_weights = self.softmax(score)
@@ -134,15 +128,10 @@ class NIC(nn.Module):
         c = c.unsqueeze(0)
 
         # Select the right encoder
-        #encoder  = self.encoders[subject]
-        # Encode features
-        #features = encoder(features)  # (bs, 360, 32)
+        encoder  = self.encoders[subject]
 
-        # Loop through the batch to select the right encoder for each sample
-        features_ = torch.zeros((features.shape[0], 360, 32))  # [bs, regions, dim]
-        for i, sub in enumerate(subject):
-            features_[i] = self.encoders[str(sub.item())](features[i])
-        features = features_
+        # Encode features
+        features = encoder(features)  # (bs, 360, 32)
 
         # Embed text
         text = self.emb(text)

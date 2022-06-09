@@ -1,10 +1,10 @@
 ---
  # Name the current run
- run: torch_test
+ run: torch_alt_batches
 
  info: | 
-     testing that the pytorch imp is actually correct for 1 sub
-     subs 2
+     all 8 subjects
+     alternating batches between subjects
      layer norm on encoder and lstm hidden state
      pytorch model
      8 subjects
@@ -23,7 +23,7 @@
  seed: 42
 
  # Training
- epochs: 50
+ epochs: 25
  batch_size: 128
  max_length: 15
  top_k: 5000 # vocab size

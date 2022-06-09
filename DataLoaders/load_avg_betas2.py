@@ -379,7 +379,10 @@ def load_subs(subs = [1, 2, 3, 4, 5, 6, 7, 8]):
         test_pair  = np.array(create_pairs(test_keys, str(sub), single=True))
         # Store
         train_pairs.append(train_pair)
-        val_pairs.append(val_pair)
+        if len(val_pair) != 0:
+            val_pairs.append(val_pair)
+        else:
+            print("empty val pairs // sub:", sub)
         test_pairs.append(test_pair)
 
         # Load betas: {sub: np.array}
