@@ -1,8 +1,9 @@
 ---
  # Name the current run
- run: torch_alt_batches
+ run: multi_head_attention
 
  info: | 
+     self attention with multihead mechanism
      all 8 subjects
      alternating batches between subjects
      layer norm on encoder and lstm hidden state
@@ -23,8 +24,8 @@
  seed: 42
 
  # Training
- epochs: 25
- batch_size: 128
+ epochs: 3
+ batch_size: 256 # 128
  max_length: 15
  top_k: 5000 # vocab size
  optimizer: Adam
@@ -41,7 +42,7 @@
 
  input_reg: 0.01         # scientific notation requires decimal notation - x.0e
  attn_reg: 0.001
- lstm_reg: 0.00003
+ lstm_reg: 0.003 # 0.00003
  output_reg: 0.00001 
 
  # Input size

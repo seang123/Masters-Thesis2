@@ -525,8 +525,8 @@ def generate_predictions_batch(model, epoch:int, generator):
 
             output, attn_map = model.inference_step(features, start_seq, hidden, carry, subject, max_len)  # [bs, max_len], [bs, max_len, regions, 1]
 
-            outputs[subject].append(output.numpy())
-            attention_maps[subject].append(attn_map.numpy())
+            outputs[subject].append(output.cpu().numpy())
+            attention_maps[subject].append(attn_map.cpu().numpy())
 
     output = []
     for (k,v) in outputs.items():
@@ -641,6 +641,7 @@ if __name__ == '__main__':
         print("Running inference")
         #inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/multi_subject_torch4/model/model_ep009.pt" # 001, 009, 029
         #inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/multi_subject_torch_3subs/model/model_ep014.pt"
-        inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/torch_alt_batches/model/model_ep008.pt"
+        #inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/torch_alt_batches/model/model_ep008.pt"
+        inf_model = "/home/hpcgies1/rds/hpc-work/NIC/Log/multi_head_attention/model/model_ep003.pt"
         inference(model, inf_model, test_generator)
         #inference(model, inf_model, test_generators)

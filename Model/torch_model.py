@@ -28,6 +28,45 @@ class LocallyConnected(nn.Module):
 
 
 
+class MultiheadAttention(nn.Module):
+    """
+    Multi-head attention
+    Each brain regions has the previous hidden state concatenated onto it
+    and can then attend to all other brain regions
+    """
+    def __init__(self, embedding_dim=544, heads=8):
+        super(MultiheadAttention, self).__init__()
+        self.multi_head = nn.MultiheadAttention(embedding_dim, heads, batch_first=True)
+
+    def forward(self, hidden, features):
+        """
+        Parameters:
+        -----------
+            hidden   - [1, bs, units]
+            features - [bs, 360, dim]
+
+        Returns:
+        --------
+            context      - [bs, 1, 32]
+            attn_weights - [bs, 360, 1]
+        """
+        hidden = torch.swapaxes(hidden, 0, 1)  # out: [bs, 1, 512]
+        hidden_repeat = torch.repeat_interleave(hidden, 360, dim=1)  # [bs, 1, 512] -> [bs, 360, 512]
+
+        # 1. Combine the hidden state with each feature vector
+        combined = torch.cat((features, hidden_repeat), dim=-1)  # [bs, 360, 544]
+
+        # 2. Multihead attention
+        attn_output, attn_output_weights = self.multi_head(combined, combined, combined)  # [bs, 360, embedding_dim], [bs, 360, 360]
+
+        attn_weights = torch.mean(attn_output_weights, axis=1)  # [bs, 360]
+        attn_weights = torch.unsqueeze(attn_weights, -1)  # [bs, 360, 1]
+
+        # 3. Apply scaling
+        context = torch.sum(features * attn_weights, dim=1)  # [bs, 1, 32]
+
+        return context, attn_weights
+
 
 class Attention(nn.Module):
     def __init__(self, embedding_dim, hidden_dim, units):
@@ -91,7 +130,8 @@ class NIC(nn.Module):
         print("Encoder ModuleDict:", self.encoders.keys())
 
         # Attention Mechanism
-        self.attention = Attention(embedding_dim_feat, units, 32)
+        #self.attention = Attention(embedding_dim_feat, units, 32)
+        self.attention = MultiheadAttention()
 
         # Embedding layer
         self.emb = nn.Embedding(vocab_size, embedding_dim_text)
@@ -145,7 +185,7 @@ class NIC(nn.Module):
             context = context.unsqueeze(1)
 
             # LSTM
-            _, (a, c) = self.lstm(context, (a, c))
+            _, (a, c) = self.lstm(context, (a, c))  # context should have shape: [bs, dim]
             a = self.layer_norm(a)
             seq = F.leaky_relu(a, 0.2)
 
