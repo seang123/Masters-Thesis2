@@ -1,15 +1,10 @@
 ---
  # Name the current run
- run: multi_head_attention
+ run: image_model
 
  info: | 
-     self attention with multihead mechanism
-     all 8 subjects
-     alternating batches between subjects
-     layer norm on encoder and lstm hidden state
-     pytorch model
-     8 subjects
-     layer norm on lstm and encoders
+     trained on -- MSOCO 118k set, minus subject 2 samples
+     layer norm on lstm hidden state
 
  log: "/home/hpcgies1/rds/hpc-work/NIC/Log/"
 
@@ -24,8 +19,8 @@
  seed: 42
 
  # Training
- epochs: 3
- batch_size: 256 # 128
+ epochs: 10
+ batch_size: 128
  max_length: 15
  top_k: 5000 # vocab size
  optimizer: Adam

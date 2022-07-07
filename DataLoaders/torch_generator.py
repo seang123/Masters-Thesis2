@@ -6,6 +6,53 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 import time
 import torch
 
+
+class Dataset_images(torch.utils.data.Dataset):
+    """ Dataset for images """
+
+    def __init__(self, pairs, images, tokenizer, units, maxlen, vocab_size, batch_size, device):
+        self.pairs=np.array(pairs)
+        self.images=images
+        self.tokenizer = tokenizer
+        self.units = units
+        self.maxlen = maxlen
+        self.vocab_size = vocab_size
+        self.device = device
+        self.batch_size = batch_size
+        print(f"Dataset size: {self.__len__()} (batches)")
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, index):
+
+        img_id, idx, cap = self.pairs[index]
+        idx = idx.astype(np.int32)
+
+        # Get beta
+        imgs  = torch.from_numpy(self.images[idx].astype(np.float32))
+
+        # Tokenize caption
+        cap_seqs = self.tokenizer.texts_to_sequences([cap])
+        cap_vector = pad_sequences(cap_seqs, maxlen=self.maxlen, truncating='post', padding='post')[0]  # [15]
+
+        # Create target
+        target = np.zeros_like(cap_vector, dtype=cap_vector.dtype)
+        target[:-1] = cap_vector[1:]
+        target = to_categorical(target, self.vocab_size)  # [15]
+
+        # init state
+        init_state = torch.zeros(self.units, dtype=torch.float32)  # [512]
+
+        target = torch.from_numpy(target)
+        cap_vector = torch.from_numpy(cap_vector)
+
+        return imgs, cap_vector, init_state, init_state, target
+
+
+
+
+
 class Dataset_batch(torch.utils.data.Dataset):
     """ Batched model with alternating batches from different subjects """
 

@@ -27,6 +27,18 @@ class LocallyConnected(nn.Module):
         return torch.stack(output, dim=1)  # (bs, 360, 32)
 
 
+class ImageEncoder(nn.Module):
+    """ Image encoding module """
+    def __init__(self, embedding_dim):
+        super(ImageEncoder, self).__init__()
+
+        # input: 196 x 512 (L * D)
+        self.encoder = nn.Linear(512, embedding_dim)
+
+    def forward(self, x):
+        output = F.dropout(F.leaky_relu(self.encoder(x), 0.2), 0.2)
+        return output
+
 
 class MultiheadAttention(nn.Module):
     """
@@ -93,8 +105,9 @@ class Attention(nn.Module):
 
         hidden_with_time_axis = torch.swapaxes(hidden, 0, 1)  # out: [bs, 1, 512]
 
-        attention_hidden_layer = torch.tanh(
-            F.leaky_relu(self.W1(features), 0.2) + F.leaky_relu(self.W2(hidden_with_time_axis), 0.2))  # out: [bs, 360, 32]
+        #attention_hidden_layer = torch.tanh(
+        #    F.leaky_relu(self.W1(features), 0.2) + F.leaky_relu(self.W2(hidden_with_time_axis), 0.2))  # out: [bs, 360, 32]
+        attention_hidden_layer = torch.tanh(self.W1(features) + self.W2(hidden_with_time_axis))  # out: [bs, 360, 32]
 
         score = self.V(attention_hidden_layer)  # out: [bs, 360, 1]
         attention_weights = self.softmax(score)
@@ -123,15 +136,13 @@ class NIC(nn.Module):
         print("in_groups:", len(in_groups), "out_groups:", len(out_groups))
 
         # Encoders
-        #self.encoders = nn.ModuleList()
-        #for i in range(n_subjects):
-        #    self.encoders.append(LocallyConnected(groups, embedding_dim_feat))
-        self.encoders = nn.ModuleDict([[str(i), LocallyConnected(groups, embedding_dim_feat)] for i in subjects])
-        print("Encoder ModuleDict:", self.encoders.keys())
+        #self.encoders = nn.ModuleDict([[str(i), LocallyConnected(groups, embedding_dim_feat)] for i in subjects])
+        #print("Encoder ModuleDict:", self.encoders.keys())
+        self.encoder = ImageEncoder(embedding_dim_feat)
 
         # Attention Mechanism
-        #self.attention = Attention(embedding_dim_feat, units, 32)
-        self.attention = MultiheadAttention()
+        self.attention = Attention(embedding_dim_feat, units, 32)
+        #self.attention = MultiheadAttention()
 
         # Embedding layer
         self.emb = nn.Embedding(vocab_size, embedding_dim_text)
@@ -168,10 +179,10 @@ class NIC(nn.Module):
         c = c.unsqueeze(0)
 
         # Select the right encoder
-        encoder  = self.encoders[subject]
+        #encoder  = self.encoders[subject]
 
         # Encode features
-        features = encoder(features)  # (bs, 360, 32)
+        features = self.encoder(features)  # (bs, 360, 32)
 
         # Embed text
         text = self.emb(text)

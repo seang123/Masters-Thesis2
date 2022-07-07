@@ -105,7 +105,7 @@ print("features:", features.shape)
 features = np.reshape(features, (features.shape[0], 196, 512))
 print("reshaped features:", features.shape)
 
-with open(f"/home/hpcgies1/rds/hpc-work/NIC/Data/Images/vgg16_conv.npy", "wb") as f:
+with open(f"/home/hpcgies1/rds/hpc-work/NIC/Data/Images/mscoco_2017/mscoco_train_vgg16.npy", "wb") as f:
     np.save(f, features)
 print("training set saved ")
 

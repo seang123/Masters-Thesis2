@@ -59,10 +59,11 @@ module load python/3.8 cuda/11.0 cudnn/8.0_cuda-11.1 slurm
 source /home/hpcgies1/rds/hpc-work/tf24/bin/activate
 
 #! Full path to application executable: 
-application="python -u /home/hpcgies1/Masters-Thesis/AttemptFour/torch_main.py"
+#application="python -u /home/hpcgies1/Masters-Thesis/AttemptFour/torch_main.py"
+application="python -u /home/hpcgies1/Masters-Thesis/AttemptFour/image_train.py"
 
 #! Run options for the application:
-options="--eval"
+#options="--eval"
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
